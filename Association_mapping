@@ -1,1 +1,119 @@
+##########################
+## CHECK SNP CALLS
+##########################
+
+## Mark variants below quality thresholds
+## This differs from Gilks' threshold by its omission of AN>400 (call rate) threshold (to be re-applied later)
+java -jar ~/Downloads/GenomeAnalysisTK-3.8-0-ge9d806836/GenomeAnalysisTK.jar -R ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/local_reference/dm6.fa -T VariantFiltration -V ~/Documents/data/GWAS_data/genotype_data/raw_multisample_genotypes/lhm_rg_HC_2015-09-15.vcf --filterExpression "QD<2.0" --filterName "QD" --filterExpression "FS>50.000" --filterName "FS" --filterExpression "MQ<58.00" --filterName "MQ" --filterExpression "MQRankSum<-7.0" --filterName "MQRS" --filterExpression "ReadPosRankSum<-5.0" --filterName "RPRS" -o marked.lhm_rg_HC_2015-09-15.vcf
+## Remove variants below quality thresholds
+java -jar ~/Downloads/GenomeAnalysisTK-3.8-0-ge9d806836/GenomeAnalysisTK.jar -R ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/local_reference/local_reference/dm6.fa -T SelectVariants -V marked.lhm_rg_HC_2015-09-15.vcf --excludeFiltered -o f1.lhm_rg_HC_2015-09-15.vcf 
+## Remove reference genomes, exclude non-variants
+java -jar ~/Downloads/GenomeAnalysisTK-3.8-0-ge9d806836/GenomeAnalysisTK.jar -R ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/local_reference/dm6.fa -T SelectVariants -V f1.lhm_rg_HC_2015-09-15.vcf --exclude_sample_name RGfi --exclude_sample_name RGil -env -o f1.noref.lhm_rg_HC_2015-09-15.vcf
+
+## Apply genotype and variant-level thresholds
+vcftools --vcf f1.noref.lhm_rg_HC_2015-09-15.vcf --minDP 10 --minGQ 30 --max-missing 0.8 --recode --recode-INFO-all --out f2.lhm
+mv f2.lhm.recode.vcf f2.lhm.vcf
+
+## Remove indels, and keep only biallelic SNPs.
+java -jar ~/Downloads/GenomeAnalysisTK-3.8-0-ge9d806836/GenomeAnalysisTK.jar -R ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/local_reference/dm6.fa -T SelectVariants  -V f2.lhm.vcf -selectType SNP  -restrictAllelesTo BIALLELIC -o f2.lhm.snp.vcf
+
+## Remove SNP loci with homozygous mutations as these indicate pervasive errors. 
+## Convert genotypes to pseudo-haploid.
+## Convert chromosome names to plink-compatible.
+grep -Ev '1/1|2/2|3/3|4/4|5/5|6/6|7/7|8/8|,\*' < f2.lhm.snp.vcf | sed -e 's|0/1|1/1|g' -e 's|chr2L|1|g' -e 's|chr2R|2|g' -e 's|chr3L|3|g' -e 's|chr3R|4|g' -e 's|chrX|5|g' -e 's|chr4|6|g' -e 's|chrM|7|g'  > f2.lhm.snp.plink_compatible.vcf
+
+## chr2R = 1
+## chr2L = 2
+## chr3R = 3
+## chr3L = 4
+## chrX = 5
+## chr4 = 6
+## chrM = 7
+
+
+####################################################
+## VCF -> PED/MAP -> BED; apply additional filters
+####################################################
+
+#use plink 1.9, not plink 1.07
+~/Downloads/plink_mac/plink --noweb --vcf f2.lhm.snp.plink_compatible.vcf --recode --out f2.lhm.snp
+#There are 1312336 SNPs at this stage
+
+#Give each variant a unique identifier, by replacing second column of MAP file
+#See R code
+#The identifier is Chrom_Pos, so that it can be standardised between datasets
+#Rename files, so that new file is f2.lhm.snp.map
+
+## Make reduced-information BED/BIM files from PED/MAP
+plink --noweb --file f2.lhm.snp --make-bed --out f2.lhm.snp
+
+## Filter on allele frequency and genotype quality
+plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --make-bed --out f2c.lhm.snp
+
+##########################
+## Quality control: Kinships and PCA 
+##########################
+
+## Import DGRP vcf file which has already been coordinate converted to reference #6
+## Keep only main chromosome arms
+vcftools --vcf dgrp2_dm6_dbSNP.vcf --chr chr2L --chr chr2R --chr chr3L --chr chr3R --chr chrX --chr chrM --chr chr4 --recode --out dgrp2_dm6_main_chrs
+mv dgrp2_dm6_main_chrs.recode.vcf dgrp2_dm6_main_chrs.vcf
+## Make plink-compatible
+sed -e 's|chr2L|1|g' -e 's|chr2R|2|g' -e 's|chr3L|3|g' -e 's|chr3R|4|g' -e 's|chrX|5|g' -e 's|chr4|6|g' -e 's|chrM|7|g' dgrp2_dm6_main_chrs.vcf > dgrp2_dm6_main_chrs_plink_compatible.vcf
+## Depth and geno-quality filters, identical to LHm
+vcftools --vcf dgrp2_dm6_main_chrs_plink_compatible.vcf --minDP 10 --minGQ 30 --max-missing 0.8 --min-alleles 2 --max-alleles 2 --recode --recode-INFO-all --out dgrp.plink_compatible.vcf
+mv dgrp.plink_compatible.vcf.recode.vcf dgrp.plink_compatible.vcf
+
+## Make ped/map
+~/Downloads/plink_mac/plink --noweb --vcf dgrp.plink_compatible.vcf --recode --out dgrp
+#4314240 SNPs
+## Reformat map file so that the identifier is "chrom_pos". This helps standardise the identifier with the LHm dataset (see R code). 
+## Modified map file is renamed to 'dgrp.map', while previous map file is called 'dgrp.old.map'
+
+## Make bed
+plink --noweb --file dgrp --make-bed --out f2.dgrp 
+
+## Remove duplicate SNP IDs, apply call rate filters
+sort -k3n dgrp.map | uniq -f2 -d | cut -f2 > dupeSNP.txt
+plink --noweb --bfile f2.dgrp --exclude dupeSNP.txt --make-bed --geno 0.05 --maf 0.05 --out f2c.dgrp
+#964269 SNPs
+
+## PCA
+## Create overlap.txt file, which includes SNP identifiers across sites in DGRP and LHM
+## Exclude predictors where allele identities do not match
+## See R code
+## MAF 0.05
+plink --noweb --bfile f2c.lhm.snp --extract ~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt --make-bed --out lhm_dgrp_intersect_maf5
+plink --noweb --bfile f2c.dgrp --extract ~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt --make-bed --out dgrp_lhm_intersect_maf5
+plink --noweb --bfile ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/lhm_dgrp_intersect_maf5 --bmerge dgrp_lhm_intersect_maf5.bed dgrp_lhm_intersect_maf5.bim dgrp_lhm_intersect_maf5.fam --make-bed --out lhm_and_dgrp_maf5
+## PCA on merged bed file, r2 cut-off 0.2
+../../ldak5.mac --thin thin --bfile lhm_and_dgrp_maf5 --window-prune .2 --window-kb 10;
+../../ldak5.mac --calc-kins-direct thin --bfile lhm_and_dgrp_maf5 --ignore-weights YES --power -0.25 --extract thin.in --kinship-raw YES;
+../../ldak5.mac --pca thin --grm thin;
+../../ldak5.mac --calc-pca-loads thin --bfile lhm_and_dgrp_maf5 --grm thin --pcastem thin
+
+## Based on PCA, remove outlier individual
+plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --remove outlier.txt --make-bed --out f3c.lhm.snp
+#765764 SNPs at this stage
+
+#############################
+## ASSOCIATION ANALYSIS
+#############################
+
+## Cut genome into sections (default settings)
+./ldak5.mac --cut-weights sect --bfile f3c.lhm.snp
+## Calculate LDAK SNP weightings
+./ldak5.mac --calc-weights-all sect --bfile f3c.lhm.snp
+## Estimate kinship matrix using by applying SNP weightings and defining MAF-effect size relationsip (LDAK recommended value=0.25)
+./ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.all --power -.25 --kinship-raw YES
+## Extract first 5 principal components
+../ldak5.mac --pca kinsm_no_outlier --grm kinsm_no_outlier
+## Extract Principal component loadings
+./ldak5.mac --calc-pca-loads kinsm_no_outlier --grm kinsm_no_outlier --bfile f3c.lhm.snp --pcastem kinsm_no_outlier
+
+## Mixed model of antagonistic axis, using weighted kinship matrix as random effect
+../ldak5.mac --linear mm --pheno pheno.txt --bfile f3c.lhm.snp --grm kinships_weighted/kinsm_no_outlier --mpheno 6
+
+## Mixed model, no correction for pop stratification (used for QQ-plot comparison, later)
+../ldak5.mac --linear mm.no.correction --pheno pheno.txt --bfile f3c.lhm.snp --mpheno 6
 
