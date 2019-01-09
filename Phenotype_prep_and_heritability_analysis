@@ -1,1 +1,180 @@
 
+## Packages
+library(car)
+library(stringr)
+library(matrixStats) 
+library(data.table)
+library(reshape2)
+library(MCMCglmm)
+
+##################################################
+## PREPARING AND NORMALISING GWAS PHENOTYPE DATA
+##################################################
+
+###### FEMALES ######
+
+# Female raw fitness data.
+fdata <- read.csv("~/Documents/data/GWAS_data/phenotype_data/raw_fitness_data/raw_female_fitness_data.csv")
+
+# Change 1 or 0 egg counts to NA 
+fdata.tmp <- fdata[,4:8]
+fdata.tmp[fdata.tmp==0] <- NA
+fdata.tmp[fdata.tmp==1] <- NA
+
+# Corrected egg counts + sex/line/rep id 
+fdata <- cbind(fdata[1:3],fdata.tmp)
+
+# Recode genotype labels
+fdata$genome <- factor(paste0("H", str_pad(string=as.character(fdata$line), width=3, pad="0")))
+
+# Get mean number of eggs per rep.
+#Calculate # of vials which have fecundity info
+fdata$n_present <- apply(fdata[,4:8],1,function(x) sum(!is.na(x)))
+#Calculate fecundity across vials with fecundity info
+fdata$eggs <- apply(fdata[,4:8],1,function(x) sum(x[x>1],na.rm=T))
+#Calculate mean number of eggs laid per rep
+egg.means <- aggregate(fdata[c("eggs","n_present")], list(rep=as.factor(fdata$rep)),sum,na.rm=T)
+egg.means$mean <- egg.means$eggs/egg.means$n_present
+
+
+# Make egg counts follow standard normal distribution within reps
+my_powerTransform<-function(x){
+  lambda<-powerTransform(x)$lambda
+  return(x^lambda)}
+
+fdata$eggs_st_norm[fdata$eggs>0] <- c(scale(my_powerTransform(fdata$eggs[fdata$rep==1 & fdata$eggs>0]/egg.means$mean[1])),scale(my_powerTransform(fdata$eggs[fdata$rep==2& fdata$eggs>0]/egg.means$mean[2])),scale(my_powerTransform(fdata$eggs[fdata$rep==3& fdata$eggs>0]/egg.means$mean[3])),scale(my_powerTransform(fdata$eggs[fdata$rep==4& fdata$eggs>0]/egg.means$mean[4])),scale(my_powerTransform(fdata$eggs[fdata$rep==5& fdata$eggs>0]/egg.means$mean[5])))
+
+# Sanity checks
+summary(aov(eggs_st_norm~factor(rep), data=subset(fdata,!is.na(eggs_st_norm))))
+#Df Sum Sq Mean Sq F value Pr(>F)
+#factor(rep)    4      0       0       0      1
+#Residuals   1107   1107       1
+
+summary(aov(eggs_st_norm~factor(genome), data=subset(fdata,!is.na(eggs_st_norm))))
+#Df Sum Sq Mean Sq F value Pr(>F)  
+#factor(genome) 222  407.3  1.8345   2.331 <2e-16 ***
+#  Residuals      889  699.7  0.7871                   
+
+
+###### MALES ######
+
+# Male raw fitness data.
+# Female raw fitness data.
+mdata <- read.csv("~/Documents/data/GWAS_data/phenotype_data/raw_fitness_data/raw_male_fitness_data.csv")
+
+# Recode genotype labels
+mdata$genome <- factor(paste0("H", str_pad(string=as.character(mdata$line), width=3, pad="0")))
+
+# Calculate proportion red-eyed over total offspring
+mdata$total_all <- mdata$total_red + mdata$total_brown
+mdata$prop <- mdata$total_red/mdata$total_all
+# Remove data points where the # of hemiclonal males was less than 5 per vial
+mdata$prop[mdata$male_density<5] <- NA
+
+# Calculate proportion red as deviation from replicate mean
+prop.means <- aggregate(mdata$prop[mdata$male_density==5], list(rep=as.factor(mdata$rep[mdata$male_density==5])),mean, na.rm=T)
+names(prop.means)[2] <- "mean"
+
+# Standardise data for each rep
+mdata$prop_ratio_scaled[mdata$male_density==5] <- c(scale(mdata$prop[mdata$rep==1 & mdata$male_density==5]/prop.means$mean[1]),scale(mdata$prop[mdata$rep==2 & mdata$male_density==5]/prop.means$mean[2]),scale(mdata$prop[mdata$rep==3 & mdata$male_density==5]/prop.means$mean[3]),scale(mdata$prop[mdata$rep==4 & mdata$male_density==5]/prop.means$mean[4]),scale(mdata$prop[mdata$rep==5 & mdata$male_density==5]/prop.means$mean[5]))
+
+
+# Sanity checks
+summary(aov(data=subset(mdata,!is.na(prop_ratio_scaled)),prop_ratio_scaled~factor(rep)))
+#Df Sum Sq Mean Sq F value Pr(>F)
+#factor(rep)    4      0       0       0      1
+#Residuals   1094   1094       1               
+
+summary(aov(prop_ratio_scaled~factor(genome), data=subset(mdata,!is.na(prop_ratio_scaled))))
+#Df Sum Sq Mean Sq F value  Pr(>F)    
+#factor(line) 222  295.1   1.329   1.458 0.00011 ***
+#  Residuals    876  798.9   0.912  
+
+
+###### JOINT TABLE ######
+
+# Create joint data table for both sexes
+fitdata <- data.frame(sex=factor(c(rep("female",nrow(fdata)),rep("male",nrow(mdata)))), genome=rep(fdata$genome,2), fit=c(fdata$eggs_st_norm, mdata$prop_ratio_scaled))
+
+###############################################
+## QUANTITATIVE GENETIC ANALYSES OF FITNESS
+###############################################
+
+prior <- list(R = list(V = diag(2)/2, nu = 0.02), G = list(G1 = list(V = diag(2)/2, nu = 2, alpha.mu = c(0,0), alpha.V = diag(2)/2)))
+
+set.seed(123)
+QG_model_eggs_st_norm <- MCMCglmm(fit ~ sex - 1, random = ~us(sex):genome, rcov = ~idh(sex):units,family = "gaussian", nitt = 100000, burnin = 25000, thin=50, data = fitdata, prior = prior, pr=T)
+
+# female heritability
+femaleh2 <- (2*(QG_model_eggs_st_norm$VCV[,1]) / (QG_model_eggs_st_norm$VCV[,1]+QG_model_eggs_st_norm$VCV[,5]))
+
+mean(femaleh2)
+#[1] 0.4197554
+HPDinterval(femaleh2)
+#lower    upper
+#var1 0.3013757 0.5375457
+
+# male heritability
+maleh2 <-  (2*(QG_model_eggs_st_norm$VCV[,4]) / (QG_model_eggs_st_norm$VCV[,4]+QG_model_eggs_st_norm$VCV[,6]))
+#mean(maleh2)
+#[1] 0.1606747
+HPDinterval(maleh2)
+#lower      upper
+#var1 0.04341171 0.2679535
+
+# rMF
+rmf <- QG_model_eggs_st_norm$VCV[,2] / sqrt((QG_model_eggs_st_norm$VCV[,1]) * (QG_model_eggs_st_norm$VCV[,4]))
+#mean(rmf)
+#[1] 0.148807
+HPDinterval(rmf)
+#lower     upper
+#var1  -0.2093967  0.4590673
+
+QG_prediction <- data.frame(genome=rep(fdata$genome,2), fit_pred=predict(QG_model_eggs_st_norm, marginal=NULL))
+
+#############################
+## PREPARING DATA FOR GWAS
+#############################
+
+# For each line and sex, combine fitness measurements across replicates
+mean.agg <- aggregate(fitdata$fit, list(fitdata$genome,fitdata$sex),mean,na.rm=T)
+names(mean.agg) <- c("genome","sex","fit")
+pred.agg <- aggregate(QG_prediction$fit_pred, list(fitdata$genome,fitdata$sex),mean,na.rm=T)
+names(pred.agg) <- c("genome","sex","fit")
+
+data.table.for.GWAS <- data.frame(genome=mean.agg$genome[mean.agg$sex=="male"], Fit_mean_male=mean.agg$fit[mean.agg$sex=="male"], Fit_mean_female=mean.agg$fit[mean.agg$sex=="female"], Fit_pred_male=pred.agg$fit[pred.agg$sex=="male"], Fit_pred_female=pred.agg$fit[pred.agg$sex=="female"])
+rm(mean.agg, pred.agg)
+
+data.table.for.GWAS <- data.table.for.GWAS[,c(1,1,2:5)]
+names(data.table.for.GWAS)[1:2] <- c("IID","FID")
+
+# A function and object needed for axis rotation
+orthogonal_transform<-function(dim1,dim2,transmat){
+  dim1<-scale(dim1)
+  dim2<-scale(dim2)
+  res<-t(t(transmat)%*%t(cbind(dim1,dim2)))
+  return(res)}
+
+M_trans <- matrix(c(-1/sqrt(2),-1/sqrt(2),-1/sqrt(2),1/sqrt(2)),ncol=2)
+
+data.table.for.GWAS$Fit_mean_conc <- orthogonal_transform(data.table.for.GWAS$Fit_mean_male, data.table.for.GWAS$Fit_mean_female, M_trans)[,1]*(-1)
+data.table.for.GWAS$Fit_mean_antF <- orthogonal_transform(data.table.for.GWAS$Fit_mean_male, data.table.for.GWAS$Fit_mean_female, M_trans)[,2]
+
+data.table.for.GWAS$Fit_pred_conc <- orthogonal_transform(data.table.for.GWAS$Fit_pred_male, data.table.for.GWAS$Fit_pred_female, M_trans)[,1]*(-1)
+data.table.for.GWAS$Fit_pred_antF <- orthogonal_transform(data.table.for.GWAS$Fit_pred_male, data.table.for.GWAS$Fit_pred_female, M_trans)[,2]
+
+# Some checks on the rotations
+plot(data.table.for.GWAS$Fit_mean_male, data.table.for.GWAS$Fit_mean_female)
+points(data.table.for.GWAS$Fit_mean_male[data.table.for.GWAS$IID=="H046"],data.table.for.GWAS$Fit_mean_female[data.table.for.GWAS$IID=="H046"], col="red")
+
+plot(data.table.for.GWAS$Fit_mean_conc, data.table.for.GWAS$Fit_mean_antF)
+points(data.table.for.GWAS$Fit_mean_conc[data.table.for.GWAS$IID=="H046"], data.table.for.GWAS$Fit_mean_antF[data.table.for.GWAS$IID=="H046"], col="red")
+
+plot(data.table.for.GWAS$Fit_pred_male, data.table.for.GWAS$Fit_pred_female)
+points(data.table.for.GWAS$Fit_pred_male[data.table.for.GWAS$IID=="H046"], data.table.for.GWAS$Fit_pred_female[data.table.for.GWAS$IID=="H046"], col="red")
+
+plot(data.table.for.GWAS$Fit_pred_conc, data.table.for.GWAS$Fit_pred_antF)
+points(data.table.for.GWAS$Fit_pred_conc[data.table.for.GWAS$IID=="H046"], data.table.for.GWAS$Fit_pred_antF[data.table.for.GWAS$IID=="H046"], col="red")
+
+
+write.table(data.table.for.GWAS, file="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt", quote=F, row.names=F, sep="\t")
