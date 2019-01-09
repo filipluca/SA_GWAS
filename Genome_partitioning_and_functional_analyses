@@ -3,21 +3,38 @@
 ###############################################
 
 
-## SNP heritability of antagonistic phenotype, whole genome
+########### SNP heritability of antagonistic phenotype, whole genome ###########
 
 ## Estimate Kinship (identical to kinship used in assoc analysis)
 ../ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.short --power -0.25
 ## Estimated REML variance
 ../ldak5.mac --reml all --grm /reml_all/kinsm_no_outlier --pheno pheno.txt --mpheno 6 
+
 ## Permuted REML variance, using 1000 permuted phenotype files
-## Go to permuted phenotype directory
+
+----- R code -----
+#1000 permuted phenotypes
+good.indv <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/f3c.lhm.snp.fam")
+good.indv <- good.indv[,1]
+
+set.seed(123)
+for (i in 1:1000){
+  pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
+  pheno <- subset(pheno,IID %in% good.indv)
+  newcols <- sample(pheno[,1],replace=F,size=nrow(pheno))
+  pheno$IID <- newcols
+  pheno$FID <- newcols
+  write.table(pheno,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/1000_shuffled_phenos/pheno",i,".txt",sep = "_"),row.names=F,col.names=F,quote=F)
+}
+----- R code -----
+
 for i in *.txt; do ~/Documents/data/GWAS_data/gwas/ldak5.mac --reml ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_all/permutations/ant/$i --pheno $i --grm ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier --mpheno 6; done
 ## Extract SNP heritability of permuted phenotype
 for i in *.reml; do awk 'NR==15 {print $2}' $i > $i.her; done
 cat *.her > all.her
 rm *.reml.her
 
-## SNP heritability of antagonistic phenotype, split into half genomes
+########### SNP heritability of antagonistic phenotype, split into half genomes ###########
 
 ## This analysis allows an estimate of inflation due to cryptic relatedness
 ## If each half of the genome contributes roughly equal heritability, then there is little long-range LD and thus little inflation due to close relatedness
@@ -41,7 +58,7 @@ for i in {1..2}; do ../ldak5.mac --calc-kins reml_XvsA --bfile f3c.lhm.snp --par
 ../ldak5.mac --reml reml_XvsA/XvsA --mgrm reml_XvsA/partition.list --pheno pheno.txt --mpheno 6
 
 
-## SNP heritability of antagonistic phenotype, split into variant effects
+########### SNP heritability of antagonistic phenotype, split into variant effects ###########
 
 ## Make cat_1 ... cat_10 files in R; these are simply a column of predictors situated within each functional category
 cat cat_* > cat_all;
@@ -54,6 +71,7 @@ for i in {1..10}; do ../ldak5.mac --calc-kins reml_categories --bfile f3c.lhm.sn
 ../ldak5.mac --reml category --mgrm reml_categories/partition.list --pheno pheno.txt --mpheno 6
 
 ## Permuted heritability enrichment by annotation category
+
 #for j in {1..2}; 
 do cat perm_${j}_cat_* > perm_${j}_cat_all; 
 ../../ldak5.mac --cut-weights sect_categories --bfile ../f3c.lhm.snp --extract perm_${j}_cat_all; 
@@ -64,18 +82,4 @@ for i in {1..10}; do ../../ldak5.mac --calc-kins reml_categories_${j} --bfile ..
 ../../ldak5.mac --reml category_${j} --mgrm reml_categories_${j}/partition.list --pheno ../pheno.txt --mpheno 6; done; done
 ## Concatenate permuted heritability shares
 cat *.share > allperms.share
-
-#1000 permuted phenotypes
-good.indv <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/f3c.lhm.snp.fam")
-good.indv <- good.indv[,1]
-
-set.seed(123)
-for (i in 1:1000){
-  pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
-  pheno <- subset(pheno,IID %in% good.indv)
-  newcols <- sample(pheno[,1],replace=F,size=nrow(pheno))
-  pheno$IID <- newcols
-  pheno$FID <- newcols
-  write.table(pheno,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/1000_shuffled_phenos/pheno",i,".txt",sep = "_"),row.names=F,col.names=F,quote=F)
-}
 
