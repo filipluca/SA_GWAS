@@ -5,6 +5,15 @@ library(ggplot2)
 ## PCA
 ###############
 
+## Thinned data
+## Calculate kinships
+./ldak5.mac --thin thin --bfile f2c.lhm.snp --window-prune .2 --window-kb 10;
+./ldak5.mac --calc-kins-direct thin --bfile f2c.lhm.snp --ignore-weights YES --power -0.25 --extract thin.in --kinship-raw YES;
+## Extract PCs
+./ldak5.mac --pca thin --grm thin;
+## Extract PC loadings
+./ldak5.mac --calc-pca-loads thin --bfile f2c.lhm.snp --grm thin --pcastem thin;
+
 ----- R code -----
 #Thinned
 thin <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/pcas/lhm_only_maf5/thin.vect")
