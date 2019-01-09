@@ -1,3 +1,4 @@
+----- R code -----
 
 ## Packages
 library(car)
@@ -178,3 +179,5 @@ points(data.table.for.GWAS$Fit_pred_conc[data.table.for.GWAS$IID=="H046"], data.
 
 
 write.table(data.table.for.GWAS, file="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt", quote=F, row.names=F, sep="\t")
+
+----- R code -----
