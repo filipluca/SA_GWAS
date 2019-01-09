@@ -89,6 +89,8 @@ ggplot(XvsA_a,aes(y=Share,x=Component2))+
   geom_vline(xintercept = 11,cex=1)+
   theme(legend.position = "none",axis.text.y = element_text(size=25),axis.text.x = element_text(size=25),axis.title.x=element_blank(),axis.title.y=element_text(size=25),panel.spacing = unit(2, "lines"))+
   scale_y_continuous(limits=c(-0.5,1.5))
+#XvsA two-sample Z test
+2*pnorm(-abs((1.924259-0.764754)/(sqrt(0.895479+0.227921))))
 ----- R code -----
 
 ## Chromosomal enrichments of candidate vs non-candidate SNPs, X vs. A
