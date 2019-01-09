@@ -1,0 +1,56 @@
+library(gridExtra)
+library(ggplot2)
+
+###############
+## PCA
+###############
+
+----- R code -----
+#Thinned
+thin <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/pcas/lhm_only_maf5/thin.vect")
+#plot(thin[,3:4],pch=19,xlim=c(-0.2,0.2),ylim=c(xlim=c(-0.2,0.2)),col="light grey")
+plot(thin[,3:4],pch=19,col="light grey",xlab="PC1",ylab="PC2")
+points(thin[thin$V1=="H029",3:4],pch=19,xlim=c(-0.2,0.1),ylim=c(xlim=c(-0.1,0.2)),col="red")
+
+#PC Loadings
+load <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/pcas/lhm_only/thin.load",head=T)
+lhm.bim <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2b.lhm.snp.bim")
+names(lhm.bim)[2] <- "Predictor"
+load2 <- merge(load,lhm.bim,by="Predictor",all.x=T)
+load2 <- load2[order(load2$V1,load2$V4),]
+rownames(load2) <- NULL
+load2$Predictor_numeric <- as.numeric(as.character(rownames(load2)))
+load2$V1 <- factor(load2$V1)
+levels(load2$V1) <- c("2L","2R","3L","3R","X")
+p1 <- ggplot(load2,aes(Predictor_numeric,Axes_1,col=V1))+geom_point()+xlab("Predictor")+ylab("PC1")
+p2 <- ggplot(load2,aes(Predictor_numeric,Axes_2,col=V1))+geom_point()+xlab("Predictor")+ylab("PC2")
+
+grid.arrange(p1,p2)
+#Lots of relatedness, no obvious outliers
+----- R code -----
+
+###############
+## LD
+###############
+
+----- R code -----
+#Import LD values, LHM
+ld_lhm <- read.table("~/Documents/data/pop_gen/ld/ld_lhm_1m.ld",head=T)
+ld_lhm <- subset(ld_lhm,CHR_A!="CHR_A")
+ld_lhm$Distance <- as.numeric(as.character(ld_lhm$BP_B))-as.numeric(as.character(ld_lhm$BP_A))
+ld_lhm <- subset(ld_lhm,Distance<=1000)
+ld_lhm$Compartment <- ifelse(ld_lhm$CHR_A==5,"X chromosome","Autosomes")
+
+ld_lhm$Distance_Bin <- cut(ld_lhm$Distance,breaks=seq(1,1000,25),labels=F)
+ld_lhm_sum <- aggregate(ld_lhm[c("R2")],by=list(Distance_Bin=ld_lhm$Distance_Bin,Compartment=ld_lhm$Compartment),mean,na.rm=T)
+#Plot
+ggplot(ld_lhm_sum,aes(y=R2,x=Distance_Bin*25,col=Compartment))+
+  scale_color_manual(values=c("dodgerblue4","darkgreen"))+
+  geom_smooth(method="lm",formula = y~log(x),se=F,size=1.75,alpha=0.7,values=c("dodgerblue4","darkgreen"))+
+  theme_bw()+
+  xlab("Distance (bp)")+
+  ylab(expression(paste("r"[LHM]^2)))+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=25),legend.text = element_text(size=25),legend.key.height=unit(2,"line"),legend.key.width=unit(3,"lines"),legend.background =element_blank(),legend.position = c(0.6,0.8),plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))+
+  scale_linetype_manual(values = c("solid","solid"))+
+  geom_point(size=2)
+----- R code -----
