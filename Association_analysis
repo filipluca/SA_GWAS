@@ -1,0 +1,20 @@
+#############################
+## ASSOCIATION ANALYSIS
+#############################
+
+## Cut genome into sections (default settings)
+./ldak5.mac --cut-weights sect --bfile f3c.lhm.snp
+## Calculate LDAK SNP weightings
+./ldak5.mac --calc-weights-all sect --bfile f3c.lhm.snp
+## Estimate kinship matrix using by applying SNP weightings and defining MAF-effect size relationsip (LDAK recommended value=0.25)
+./ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.all --power -.25 --kinship-raw YES
+## Extract first 5 principal components
+../ldak5.mac --pca kinsm_no_outlier --grm kinsm_no_outlier
+## Extract Principal component loadings
+./ldak5.mac --calc-pca-loads kinsm_no_outlier --grm kinsm_no_outlier --bfile f3c.lhm.snp --pcastem kinsm_no_outlier
+
+## Mixed model of antagonistic axis, using weighted kinship matrix as random effect
+../ldak5.mac --linear mm --pheno pheno.txt --bfile f3c.lhm.snp --grm kinships_weighted/kinsm_no_outlier --mpheno 6
+
+## Mixed model, no correction for pop stratification (used for QQ-plot comparison, later)
+../ldak5.mac --linear mm.no.correction --pheno pheno.txt --bfile f3c.lhm.snp --mpheno 6
