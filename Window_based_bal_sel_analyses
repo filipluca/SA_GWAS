@@ -1,1 +1,9 @@
+####################################################
+## WINDOW-BASED ASSOCIATION
+####################################################
 
+## Chunk-based association testing, but using reference genome 5 chunks
+## See R code for details on how to make cbat_r5_v2.txt
+../ldak5.mac --cut-genes cbat_r5_no_covar --bfile f3c.lhm.snp --genefile chunks_r5_v2.txt --ignore-weights YES --pvalues assoc_mixed_model/mm.pvalues;
+../ldak5.mac --calc-genes-reml cbat_r5_no_covar --bfile f3c.lhm.snp --ignore-weights YES --power -.25 --pheno pheno.txt --mpheno 6;
+../ldak5.mac --join-genes-reml cbat_r5_no_covar
