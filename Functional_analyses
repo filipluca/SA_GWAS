@@ -1,0 +1,251 @@
+###############################################
+## PARTITIONING VARIANCE + REML ESTIMATION
+###############################################
+
+##############################
+## Whole genome REML analysis
+##############################
+
+## SNP heritability of antagonistic phenotype, whole genome
+
+## Estimate Kinship (identical to kinship used in assoc analysis)
+../ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.short --power -0.25
+## Estimated REML variance
+../ldak5.mac --reml all --grm /reml_all/kinsm_no_outlier --pheno pheno.txt --mpheno 6 
+
+## Permuted REML variance, using 1000 permuted phenotype files
+
+----- R code -----
+#1000 permuted phenotypes
+good.indv <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/f3c.lhm.snp.fam")
+good.indv <- good.indv[,1]
+
+set.seed(123)
+for (i in 1:1000){
+  pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
+  pheno <- subset(pheno,IID %in% good.indv)
+  newcols <- sample(pheno[,1],replace=F,size=nrow(pheno))
+  pheno$IID <- newcols
+  pheno$FID <- newcols
+  write.table(pheno,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/1000_shuffled_phenos/pheno",i,".txt",sep = "_"),row.names=F,col.names=F,quote=F)
+}
+----- R code -----
+
+for i in *.txt; do ~/Documents/data/GWAS_data/gwas/ldak5.mac --reml ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_all/permutations/ant/$i --pheno $i --grm ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier --mpheno 6; done
+## Extract SNP heritability of permuted phenotype
+for i in *.reml; do awk 'NR==15 {print $2}' $i > $i.her; done
+cat *.her > all.her
+rm *.reml.her
+
+########### SNP heritability of antagonistic phenotype, split into half genomes ###########
+
+## This analysis allows an estimate of inflation due to cryptic relatedness
+## If each half of the genome contributes roughly equal heritability, then there is little long-range LD and thus little inflation due to close relatedness
+## Make half1 and half2 files in R; these are simply a column of predictors situated on half 1 and half 2 of genome
+cat half1 half2 > halfALL
+../ldak5.mac --cut-kins reml_half_and_half --bfile f3c.lhm.snp --partition-number 2 --partition-prefix half
+for j in {1..2}; do ../ldak5.mac --calc-kins reml_half_and_half --partition $j --bfile f3c.lhm.snp --weights sect/weights.short --power -.25; done
+../ldak5.mac --join-kins reml_half_and_half
+## REML
+../ldak5.mac --reml reml_half_and_half/half_and_half --mgrm reml_half_and_half/partition.list --pheno pheno.txt --mpheno 6
+
+##############################
+## X vs Autosome 
+##############################
+
+## SNP heritability of antagonistic phenotype, split into X vs. autosome
+
+## Make list1 and list2 files in R; these are simply a column of predictors situated on autosomes vs X chromosome
+
+----- R code -----
+lhm.bim <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/f3c.lhm.snp.bim")
+list1 <- subset(lhm.bim,V1!=5)$V2  
+list2 <- subset(lhm.bim,V1==5)$V2
+write.table(list1,"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/list1",quote=F,row.names=F,col.names=F)
+write.table(list2,"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/list2",quote=F,row.names=F,col.names=F)
+----- R code -----
+
+cat list1 list2 > listALL
+../ldak5.mac --cut-kins reml_XvsA --bfile f3c.lhm.snp --partition-number 2 --partition-prefix list
+## Calculate kinships for each section
+for i in {1..2}; do ../ldak5.mac --calc-kins reml_XvsA --bfile f3c.lhm.snp --partition $i --weights sect/weights.short --power -0.25; done
+## REML
+../ldak5.mac --reml reml_XvsA/XvsA --mgrm reml_XvsA/partition.list --pheno pheno.txt --mpheno 6
+
+----- R code -----
+XvsA_a <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_XvsA/XvsA.share",head=T)
+XvsA_a$Phenotype <- "Antagonistic index"
+#For paper
+XvsA_a$Component2 <- c("Autosome","X")
+XvsA_a$Z_score <- (XvsA_a$Share-XvsA_a$Expected)/XvsA_a$SD
+XvsA_a$Z_P <- 2*pnorm(-abs(XvsA_a$Z_score))
+ggplot(XvsA_a,aes(y=Share,x=Component2))+
+  theme_bw()+
+  geom_point(shape=19,size=5,aes(y=Share),col="lightblue2")+
+  geom_errorbar(aes(ymin=Share-(1.96*SD), ymax=Share+(1.96*SD)),width=.2,cex=1,position=position_dodge(.9),col="black")+
+  geom_point(shape="+",size=10,col="black",aes(y=Expected))+
+  ylab(expression("Relative contribution to h"[SNP]^"2"))+
+  geom_hline(yintercept=0,cex=1)+
+  geom_vline(xintercept = 11,cex=1)+
+  theme(legend.position = "none",axis.text.y = element_text(size=25),axis.text.x = element_text(size=25),axis.title.x=element_blank(),axis.title.y=element_text(size=25),panel.spacing = unit(2, "lines"))+
+  scale_y_continuous(limits=c(-0.5,1.5))
+----- R code -----
+
+## Chromosomal enrichments of candidate vs non-candidate SNPs, X vs. A
+----- R code -----
+veps <- read.table("~/Downloads/VEP_all_severe.txt")
+
+veps$Chromosome <- do.call(rbind,strsplit(as.character(veps$V1),split = "_"))[,1]
+veps$Chromosome <- as.factor(veps$Chromosome)
+veps$Basepair <- do.call(rbind,strsplit(as.character(veps$V1),split = "_"))[,2]
+names(veps)[4] <- "Consequence"
+
+veps <- merge(veps[,c("Chromosome","Basepair","Consequence")],assoc[,c("Chromosome","Basepair","fdr","Predictor")],by=c("Chromosome","Basepair"),all.y=T)
+veps <- veps[order(veps$Chromosome,veps$Basepair),]
+
+z <- vector("numeric")
+pval <- vector("numeric")
+veps$X_or_auto <- factor(ifelse(veps$Chromosome=="X","X","A"))
+for (i in levels(veps$X_or_auto)){
+  obs_t <- nrow(subset(veps,X_or_auto==i & fdr<0.3))
+  obs_tot <- nrow(subset(veps,fdr<0.3))
+  exp <- nrow(subset(veps,X_or_auto==i))/nrow(veps)
+  pval[i] <- prop.test(x=obs_t,n=obs_tot,p=exp)$p.val
+  sign <- ifelse(obs_t/obs_tot>exp,1,-1)
+  z[i] <- sqrt(prop.test(x=obs_t,n=obs_tot,p=exp)$statistic)*sign
+}
+z <- data.frame(z,pval)
+z$Consequence <- rownames(z)
+z$Sig <-ifelse(z$pval<0.05,"Sig","NonSig") 
+ggplot(subset(z,abs(z)>0.01),aes(x=Consequence,y=z,fill=Sig))+geom_bar(stat="identity")+coord_flip()+theme_bw()
+----- R code -----
+
+
+##############################
+## Variant effects 
+##############################
+
+## Make cat_1 ... cat_10 files in R; these are simply a column of predictors situated within each functional category
+----- R code -----
+#Make category 
+veps.sub <- subset(veps,Consequence %in% c("3_prime_UTR_variant","5_prime_UTR_variant","downstream_gene_variant","intergenic_variant","intron_variant","missense_variant","non_coding_transcript_exon_variant","splice_region_variant","synonymous_variant","upstream_gene_variant"))
+veps.sub$Consequence <- as.character(veps.sub$Consequence)
+veps.sub$Consequence <- as.factor(veps.sub$Consequence)
+levels(veps.sub$Consequence)
+for (i in c(1:10)){
+  write.table(subset(veps.sub,Consequence==levels(Consequence)[i])$Predictor,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/cat",i,sep="_"),row.names = F,quote=F,col.names=F)
+}
+----- R code -----
+
+cat cat_* > cat_all;
+../ldak5.mac --cut-weights sect_categories --bfile f3c.lhm.snp --extract cat_all;
+../ldak5.mac --calc-weights-all sect_categories --bfile f3c.lhm.snp --extract cat_all;
+../ldak5.mac --join-weights sect_categories --extract cat_all;
+../ldak5.mac --cut-kins reml_categories --bfile f3c.lhm.snp --partition-number 10 --partition-prefix cat_;
+for i in {1..10}; do ../ldak5.mac --calc-kins reml_categories --bfile f3c.lhm.snp --partition $i --weights sect_categories/weights.short --power -0.25; done;
+## REML
+../ldak5.mac --reml category --mgrm reml_categories/partition.list --pheno pheno.txt --mpheno 6
+
+## Permuted heritability enrichment by annotation category
+
+----- R code -----
+set.seed(123)
+for (j in 1:1000){
+v <- c(veps.sub$Predictor,veps.sub$Predictor)
+st <- which(veps.sub$Predictor==sample(veps.sub$Predictor,size=1))
+perm_v <- v[st:(st+(765370-1))]
+perm_d <- data.frame(perm_v,veps.sub$Consequence)
+names(perm_d) <- c("Predictor","Consequence")
+for (i in 1:10){
+  write.table(subset(perm_d,Consequence==levels(Consequence)[i])$Predictor,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_categories_perm/perm",j,"cat",i,sep="_"),row.names = F,quote=F,col.names=F)
+}
+}
+----- R code -----
+#for j in {1..1000}; 
+do cat perm_${j}_cat_* > perm_${j}_cat_all; 
+../../ldak5.mac --cut-weights sect_categories --bfile ../f3c.lhm.snp --extract perm_${j}_cat_all; 
+../../ldak5.mac --calc-weights-all sect_categories --bfile ../f3c.lhm.snp --extract perm_${j}_cat_all; 
+../../ldak5.mac --join-weights sect_categories --extract perm_${j}_cat_all; 
+../../ldak5.mac --cut-kins reml_categories_${j} --bfile ../f3c.lhm.snp --partition-number 10 --partition-prefix perm_${j}_cat_; 
+for i in {1..10}; do ../../ldak5.mac --calc-kins reml_categories_${j} --bfile ../f3c.lhm.snp --partition $i --weights sect_categories/weights.short --power -0.25; 
+../../ldak5.mac --reml category_${j} --mgrm reml_categories_${j}/partition.list --pheno ../pheno.txt --mpheno 6; done; done
+## Concatenate permuted heritability shares
+cat *.share > allperms.share
+
+----- R code -----
+## Observed share of antagonistic snp heritability per variant effect category
+obs <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_categories/category.share",head=T)
+#Plot 
+K1.share <- as.numeric(as.character(subset(allperms,Component=="Share_K1")$Share))
+K1.q025 <- quantile(K1.share,0.025)
+K1.q975 <- quantile(K1.share,0.975)
+K1.mean <- mean(K1.share)
+K1.pval <- sum(abs(K1.share)>abs(obs$Share[1]))/1000
+K2.share <- as.numeric(as.character(subset(allperms,Component=="Share_K2")$Share))
+K2.q025 <- quantile(K2.share,0.025)
+K2.q975 <- quantile(K2.share,0.975)
+K2.mean <- mean(K2.share)
+K2.pval <- sum(abs(K2.share)>abs(obs$Share[2]))/1000
+K3.share <- as.numeric(as.character(subset(allperms,Component=="Share_K3")$Share))
+K3.q025 <- quantile(K3.share,0.025)
+K3.q975 <- quantile(K3.share,0.975)
+K3.mean <- mean(K3.share)
+K3.pval <- sum(abs(K3.share)>abs(obs$Share[3]))/1000
+K4.share <- as.numeric(as.character(subset(allperms,Component=="Share_K4")$Share))
+K4.q025 <- quantile(K4.share,0.025)
+K4.q975 <- quantile(K4.share,0.975)
+K4.mean <- mean(K4.share)
+K4.pval <- sum(abs(K4.share)>abs(obs$Share[4]))/1000
+K5.share <- as.numeric(as.character(subset(allperms,Component=="Share_K5")$Share))
+K5.q025 <- quantile(K5.share,0.025)
+K5.q975 <- quantile(K5.share,0.975)
+K5.mean <- mean(K5.share)
+K5.pval <- sum(abs(K5.share)>abs(obs$Share[5]))/1000
+K6.share <- as.numeric(as.character(subset(allperms,Component=="Share_K6")$Share))
+K6.q025 <- quantile(K6.share,0.025)
+K6.q975 <- quantile(K6.share,0.975)
+K6.mean <- mean(K6.share)
+K6.pval <- sum(abs(K6.share)>abs(obs$Share[6]))/1000
+K7.share <- as.numeric(as.character(subset(allperms,Component=="Share_K7")$Share))
+K7.q025 <- quantile(K7.share,0.025)
+K7.q975 <- quantile(K7.share,0.975)
+K7.mean <- mean(K7.share)
+K7.pval <- sum(abs(K7.share)>abs(obs$Share[7]))/1000
+K8.share <- as.numeric(as.character(subset(allperms,Component=="Share_K8")$Share))
+K8.q025 <- quantile(K8.share,0.025)
+K8.q975 <- quantile(K8.share,0.975)
+K8.mean <- mean(K8.share)
+K8.pval <- sum(abs(K8.share)>abs(obs$Share[8]))/1000
+K9.share <- as.numeric(as.character(subset(allperms,Component=="Share_K9")$Share))
+K9.q025 <- quantile(K9.share,0.025)
+K9.q975 <- quantile(K9.share,0.975)
+K9.mean <- mean(K9.share)
+K9.pval <- sum(abs(K9.share)>abs(obs$Share[9]))/1000
+K10.share <- as.numeric(as.character(subset(allperms,Component=="Share_K10")$Share))
+K10.q025 <- quantile(K10.share,0.025)
+K10.q975 <- quantile(K10.share,0.975)
+K10.mean <- mean(K10.share)
+K10.pval <- sum(abs(K10.share)>abs(obs$Share[10]))/1000
+
+obs$q025 <- c(K1.q025,K2.q025,K3.q025,K4.q025,K5.q025,K6.q025,K7.q025,K8.q025,K9.q025,K10.q025)
+obs$q975 <- c(K1.q975,K2.q975,K3.q975,K4.q975,K5.q975,K6.q975,K7.q975,K8.q975,K9.q975,K10.q975)
+obs$mean <- c(K1.mean,K2.mean,K3.mean,K4.mean,K5.mean,K6.mean,K7.mean,K8.mean,K9.mean,K10.mean)
+obs$pval <- c(K1.pval,K2.pval,K3.pval,K4.pval,K5.pval,K6.pval,K7.pval,K8.pval,K9.pval,K10.pval)
+obs$Component2 <-  factor(c("3' UTR","5' UTR","Downstream","Intergenic","Intron","Missense","Non-coding transcript exon","Splice region","Synonymous","Upstream"))
+#obs <- obs[order(obs$Component2),]
+obs$Component2<-factor(obs$Component2, levels=c("Upstream","Synonymous","Splice region","Non-coding transcript exon","Missense","Intron","Intergenic","Downstream","5' UTR","3' UTR"))
+
+ggplot(obs,aes(y=Share,x=Component2,col=factor(pval<0.05)))+
+  theme_bw()+
+  scale_color_manual(values=c("lightblue","dodgerblue4"))+
+  geom_point(shape=19,size=5,aes(y=Share))+
+  geom_errorbar(aes(ymin=q025, ymax=q975),width=.4,cex=1,position=position_dodge(.9),col="black")+
+  geom_point(shape="+",size=10,col="black",aes(y=mean))+
+  ylab(expression("Relative contribution to h"[SNP]^"2"))+
+  coord_flip()+
+  geom_hline(yintercept=0,cex=1)+
+  geom_vline(xintercept = 11,cex=1)+
+  theme(legend.position = "none",axis.text = element_text(size=25),axis.title.x=element_text(size=25),axis.title.y=element_blank(),panel.spacing = unit(2, "lines"),strip.background = element_rect(fill=c("grey80")),strip.text = element_text(size=25))+
+  scale_y_continuous(limits=c(-2,2.2),oob=rescale_none)
+
+----- R code -----
