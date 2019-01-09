@@ -17,7 +17,6 @@ for i in *.reml; do awk 'NR==15 {print $2}' $i > $i.her; done
 cat *.her > all.her
 rm *.reml.her
 
-
 ## SNP heritability of antagonistic phenotype, split into half genomes
 
 ## This analysis allows an estimate of inflation due to cryptic relatedness
@@ -65,4 +64,18 @@ for i in {1..10}; do ../../ldak5.mac --calc-kins reml_categories_${j} --bfile ..
 ../../ldak5.mac --reml category_${j} --mgrm reml_categories_${j}/partition.list --pheno ../pheno.txt --mpheno 6; done; done
 ## Concatenate permuted heritability shares
 cat *.share > allperms.share
+
+#1000 permuted phenotypes
+good.indv <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/f3c.lhm.snp.fam")
+good.indv <- good.indv[,1]
+
+set.seed(123)
+for (i in 1:1000){
+  pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
+  pheno <- subset(pheno,IID %in% good.indv)
+  newcols <- sample(pheno[,1],replace=F,size=nrow(pheno))
+  pheno$IID <- newcols
+  pheno$FID <- newcols
+  write.table(pheno,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/1000_shuffled_phenos/pheno",i,".txt",sep = "_"),row.names=F,col.names=F,quote=F)
+}
 
