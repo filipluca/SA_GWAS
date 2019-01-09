@@ -40,7 +40,14 @@ grep -Ev '1/1|2/2|3/3|4/4|5/5|6/6|7/7|8/8|,\*' < f2.lhm.snp.vcf | sed -e 's|0/1|
 #There are 1312336 SNPs at this stage
 
 #Give each variant a unique identifier, by replacing second column of MAP file
-#See R code
+
+----- R code -----
+#Make Predictor ID Chrom_Pos
+map <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2.lhm.snp.map")
+map$V2 <- paste(map$V1,map$V4,sep="_")
+write.table(map,"~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2.lhm.snp.map",quote=F,sep="\t",col.names=F,row.names=F)
+----- R code -----
+
 #The identifier is Chrom_Pos, so that it can be standardised between datasets
 #Rename files, so that new file is f2.lhm.snp.map
 
@@ -67,7 +74,15 @@ mv dgrp.plink_compatible.vcf.recode.vcf dgrp.plink_compatible.vcf
 ## Make ped/map
 ~/Downloads/plink_mac/plink --noweb --vcf dgrp.plink_compatible.vcf --recode --out dgrp
 #4314240 SNPs
-## Reformat map file so that the identifier is "chrom_pos". This helps standardise the identifier with the LHm dataset (see R code). 
+## Reformat map file so that the identifier is "chrom_pos". This helps standardise the identifier with the LHm dataset (see R code).
+
+----- R code -----
+#Standardise 'Predictor' ID
+map <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/dgrp.map")
+map$V2 <- paste(map$V1,map$V4,sep="_")
+write.table(map,"~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/dgrp.map",quote=F,sep="\t",col.names=F,row.names=F)
+----- R code -----
+
 ## Modified map file is renamed to 'dgrp.map', while previous map file is called 'dgrp.old.map'
 
 ## Make bed
@@ -81,8 +96,25 @@ plink --noweb --bfile f2.dgrp --exclude dupeSNP.txt --make-bed --geno 0.05 --maf
 ## PCA
 ## Create overlap.txt file, which includes SNP identifiers across sites in DGRP and LHM
 ## Exclude predictors where allele identities do not match
-## See R code
-## MAF 0.05
+
+----- R code -----
+#make file which contains predictors which overlap between Nine and LHM, filtered for MAF<0.05
+dgrp.bim <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/f2c.dgrp.bim")
+lhm.bim <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2c.lhm.snp.bim")
+#merge by Predictor
+overlap.bim <- merge(dgrp.bim,lhm.bim,by=c("V2"))
+overlap.bim$V5.x <- as.character(overlap.bim$V5.x)
+overlap.bim$V6.x <- as.character(overlap.bim$V6.x)
+overlap.bim$V5.y <- as.character(overlap.bim$V5.y)
+overlap.bim$V6.y <- as.character(overlap.bim$V6.y)
+#find inconsistent SNPs between Nine and LHM
+inconsistent <- subset(overlap.bim,(V5.x!=V5.y & V5.x!=V6.y) | (V6.x!=V5.y & V6.x!=V6.y))$V2
+#Remove them
+overlap.clean <- subset(overlap.bim,!(V2 %in% inconsistent))
+#write.table(overlap.clean[1],"~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt",row.names=F,col.names=F,quote=F)
+----- R code -----
+
+## Overlapping datasets
 plink --noweb --bfile f2c.lhm.snp --extract ~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt --make-bed --out lhm_dgrp_intersect_maf5
 plink --noweb --bfile f2c.dgrp --extract ~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt --make-bed --out dgrp_lhm_intersect_maf5
 plink --noweb --bfile ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/lhm_dgrp_intersect_maf5 --bmerge dgrp_lhm_intersect_maf5.bed dgrp_lhm_intersect_maf5.bim dgrp_lhm_intersect_maf5.fam --make-bed --out lhm_and_dgrp_maf5
@@ -92,28 +124,47 @@ plink --noweb --bfile ~/Documents/data/GWAS_data/genotype_data/formatting_multis
 ../../ldak5.mac --pca thin --grm thin;
 ../../ldak5.mac --calc-pca-loads thin --bfile lhm_and_dgrp_maf5 --grm thin --pcastem thin
 
+## Inspect top PCs 
+----- R code -----
+#PCA plot of LHm+DGRP (merged)
+thin <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/merged_dgrp_lhm_maf5/thin.vect")
+thin$pop <- ifelse(thin$V1=="line","DGRP","LHM")
+
+par(mar=c(5,5,5,5))
+plot(thin[thin$pop=="LHM",c(3,4)],col="dark grey",pch=19,xlab=c("PC1"),ylab=c("PC2"),cex=1.4,cex.axis=1.3,cex.lab=1.8,xlim=c(-0.02,0.02),ylim=c(-0.15,0.12),las=1,asp=1)
+points(thin[thin$pop=="DGRP",c(3,4)],col="red",pch=4,xlab=c("PC1"),ylab=c("PC2"),cex.lab=2,cex=1.4,cex.axis=2,xlim=c(-0.06,0.09),ylim=c(-0.14,0.1))
+legend(-0.15,0.12,legend=c(expression("LH"[M]),"RAL"),col=c("dark grey","red"),pch=c(19,4),pt.cex = 1.5,bty="n",y.intersp=1,x.intersp=0.5,cex=1.7)
+
+#PC Loadings
+load <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/merged_dgrp_lhm_maf5/thin.load",head=T)
+lhm.bim <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2b.lhm.snp.bim")
+names(lhm.bim)[2] <- "Predictor"
+load2 <- merge(load,lhm.bim,by="Predictor",all.x=T)
+load2 <- load2[order(load2$V1,load2$V4),]
+rownames(load2) <- NULL
+load2$Predictor_numeric <- as.numeric(as.character(rownames(load2)))
+load2$V1 <- factor(load2$V1)
+levels(load2$V1) <- c("2L","2R","3L","3R","X")
+#library(ggplot2)
+p1 <- ggplot(subset(load2,!is.na(V1)),aes(Predictor_numeric,Axes_1,col=V1))+geom_point()+xlab("Predictor")+ylab("PC1")
+p1
+p2 <- ggplot(subset(load2,!is.na(V1)),aes(Predictor_numeric,Axes_2,col=V1))+geom_point()+xlab("Predictor")+ylab("PC2")
+p2
+grid.arrange(p1,p2)
+----- R code -----
+
+
 ## Based on PCA, remove outlier individual
 plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --remove outlier.txt --make-bed --out f3c.lhm.snp
 #765764 SNPs at this stage
 
-#############################
-## ASSOCIATION ANALYSIS
-#############################
-
-## Cut genome into sections (default settings)
-./ldak5.mac --cut-weights sect --bfile f3c.lhm.snp
-## Calculate LDAK SNP weightings
-./ldak5.mac --calc-weights-all sect --bfile f3c.lhm.snp
-## Estimate kinship matrix using by applying SNP weightings and defining MAF-effect size relationsip (LDAK recommended value=0.25)
-./ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.all --power -.25 --kinship-raw YES
-## Extract first 5 principal components
-../ldak5.mac --pca kinsm_no_outlier --grm kinsm_no_outlier
-## Extract Principal component loadings
-./ldak5.mac --calc-pca-loads kinsm_no_outlier --grm kinsm_no_outlier --bfile f3c.lhm.snp --pcastem kinsm_no_outlier
-
-## Mixed model of antagonistic axis, using weighted kinship matrix as random effect
-../ldak5.mac --linear mm --pheno pheno.txt --bfile f3c.lhm.snp --grm kinships_weighted/kinsm_no_outlier --mpheno 6
-
-## Mixed model, no correction for pop stratification (used for QQ-plot comparison, later)
-../ldak5.mac --linear mm.no.correction --pheno pheno.txt --bfile f3c.lhm.snp --mpheno 6
+## Examine relatedness between individuals
+----- R code -----
+kinsm <- read.table('~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier.grm.raw')
+kinsm <- as.matrix(kinsm)
+kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
+kinsm <- as.data.frame(as.numeric(kinsm))
+names(kinsm) <- "V1"
+ggplot(kinsm,aes(V1))+theme_bw()+geom_histogram(fill="grey65",col="white",bins=50)+xlab("Genomic relationship values")+theme(axis.text=element_text(size=25),axis.title=element_text(size=30))
+----- R code -----
 
