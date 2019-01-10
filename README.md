@@ -3,7 +3,9 @@
 #### Phenotype and quant. gen analysis
 
 -Male and female fitness data QC
+
 -Estimation of male and female heritability using animal model (MCMCglmm)
+
 -Estimation of intersexual genetic correlation for fitness
 -Definition of an antagonistic index
 -Male and female fitness plot + antagonistic index overlay
