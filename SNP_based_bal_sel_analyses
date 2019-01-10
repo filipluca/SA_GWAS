@@ -494,3 +494,216 @@ dpgp3.frq <- dpgp3.frq[order(dpgp3.frq$Chrom,dpgp3.frq$Pos),]
 #write.table(dpgp3.frq,"Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.plus.mono.all.frq",quote=F,row.names=F)
 ----- R code -----
 
+######################################################
+## ANTAGONISTIC vs. NON-ANTAGONISTIC
+######################################################
+
+----- R code -----
+#Import GWAS positions
+GWAS.pos <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/GWAS_positions.r5.txt")
+names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
+GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
+levels(GWAS.pos$Chrom_plink) <- 1:5
+GWAS.pos$Predictor <- paste(GWAS.pos$Chrom_plink,GWAS.pos$Pos.r6,sep="_")
+
+#Import linked selection values
+ls <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/LS_map_all_chrom_r5_and_r6.txt",header = T)
+
+#Import recombination rates
+rr <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/Comeron_tables/recom_all_chrom_r5_and_r6.txt",head=T)
+
+#Link window-based measures with SNP positions
+GWAS.pos$BIN_START <- cut(GWAS.pos$Pos.r5,breaks=levels(factor(ls$BIN_START)),include.lowest = T,labels=F,right=F)
+GWAS.pos$BIN_START <- GWAS.pos$BIN_START-1
+GWAS.pos$BIN_START <- GWAS.pos$BIN_START*1000
+GWAS.pos$BIN_START<- GWAS.pos$BIN_START+1
+names(GWAS.pos)[1:2] <- c("Chrom","Pos")
+GWAS.pos <- Reduce(function(...) merge(...,by=c("Chrom","BIN_START"),all.x=T),list(GWAS.pos,ls[c("Chrom","BIN_START","LS")],rr[c("Chrom","BIN_START","RR")]))
+names(GWAS.pos)[c(1,3)] <- c("Chrom.r5","Pos.r5")
+
+#Import allele frequencies in the DPGP3
+dpgp3.frq <- read.table("Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.plus.mono.all.frq",head=T)
+
+#Combine dataframes
+dd2 <- Reduce(function(...) merge(...,all.x=T,by=c("Predictor")),list(assoc,dpgp3.frq[c("N_alleles","N_chrom","A1","A2","A1_freq","A2_freq","MAF_DPGP3","Predictor")],GWAS.pos))
+#Are bi-allelic SNPs the same in LHM and comparison population?
+dd2$Same_alleles <- with(dd2,ifelse((A1.x==A1.y | A1.x==A2.y) & (A2.x==A2.y | A2.x==A1.y),1,0))
+#Remove low depth and tri-allelic sites
+dd2$MAF_DPGP3_filt <- ifelse(dd2$N_chrom<40 | dd2$N_alleles==3,NA,dd2$MAF_DPGP3)
+#If i) bi-allelic + incorrect alleles + good depth, or ii) mono-allelic + good depth, make MAF=0
+dd2$MAF_DPGP3_incl_mono <- ifelse(((dd2$N_alleles==1) | (dd2$N_alleles==2 & dd2$Same_alleles==0)) & dd2$N_chrom>39,0,dd2$MAF_DPGP3_filt)
+
+#Regress out LS/RR from MAF values
+dd2$MAF.resid[!is.na(dd2$LS) & dd2$Chromosome!="X"] <- glm(data=subset(dd2,!is.na(LS) & Chromosome!="X"),MAF~LS)$residuals
+dd2$MAF.resid[!is.na(dd2$RR) & dd2$Chromosome=="X"] <- glm(data=subset(dd2,!is.na(dd2$RR) & Chromosome=="X"),MAF~RR)$residuals
+
+####### Matched SNP analysis ######
+
+#Matched SNP analysis####
+matched_pred <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/ld_pruned/clumping/clumped_r0.4_10kb.clumped",head=T)
+names(matched_pred)[3] <- "Predictor"
+dd2c <- merge(dd2,matched_pred[3],by="Predictor")
+
+#Plot MAF spectrum
+fig3d <- ggplot(dd2c,aes(MAF_DPGP3_incl_mono,fill=factor(dd2c$fdr<0.3)))+
+  geom_density(alpha=0.7,cex=0.75)+
+  scale_fill_manual(labels = c("Control","Antagonistic"),values=c("darkgrey","dodgerblue4"))+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=10),legend.position="none",legend.key.height=unit(1,"line"),legend.key.width=unit(1,"line"),legend.background =element_blank())+
+  xlab("")+
+  ylab("")+
+  scale_x_continuous(breaks=seq(0, 0.5, 0.25))
+fig3d
+
+#Compare matched candidates and non-candidates
+#Use candidate MAFs as vector of quantiles to sample from
+cand.auto <- subset(dd2c,fdr<0.3 & Chromosome!="X")$MAF.resid
+cand_ord.auto <- sort(cand.auto)
+length(cand_ord.auto)
+#Create dataframe of autosomal non-candidates
+dd2c.auto <- subset(dd2c,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid) & Chromosome!="X")[,c("MAF.resid","fdr","MAF_DPGP3_incl_mono")]
+#Sample 1,000 times from this dataframe and match allele frequencies with candidates
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.auto)){                            
+    tmp1[[i]] <- subset(dd2c.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(dd2c.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+#Table of matched allele frequencies
+match.auto <- do.call(rbind,tmp2)
+
+#Compare matched candidates and non-candidates
+#Use candidate MAFs as vector of quantiles to sample from
+cand.X <- subset(dd2c,fdr<0.3 & Chromosome=="X")$MAF.resid
+cand_ord.X <- sort(cand.X)
+length(cand_ord.X)
+#Create dataframe of autosomal non-candidates
+dd2c.X <- subset(dd2c,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid) & Chromosome=="X")[,c("MAF.resid","fdr","MAF_DPGP3_incl_mono")]
+#Sample 1,000 times from this dataframe and match allele frequencies with candidates
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.X)){                            
+    tmp1[[i]] <- subset(dd2c.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(dd2c.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+#Table of matched allele frequencies
+match.X <- do.call(rbind,tmp2)
+
+match.dpgp3 <- rbind(match.auto,match.X)
+match.dpgp3 <- match.dpgp3[order(match.dpgp3$V4),]
+
+
+#Aggregate matched by simulation #
+#Calculate mean MAF for each simulation and compare to candidate MAF
+match_sum <- aggregate(match.dpgp3$MAF_DPGP3_incl_mono,by=list(match.dpgp3$V4),mean,na.rm=T)
+names(match_sum) <- c("Simulation","MAF_DPGP3_incl_mono")
+
+obs_mean <- mean(subset(dd2c,fdr<0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))$MAF_DPGP3_incl_mono,na.rm=T)
+unmatched_mean <- mean(subset(dd2c,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))$MAF_DPGP3_incl_mono,na.rm=T)
+
+#Histogram
+fig3e <- ggplot(match_sum,aes(MAF_DPGP3_incl_mono))+
+  geom_histogram(fill="grey75",col="white",bins=30)+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("")+
+  geom_segment(x=obs_mean,xend=obs_mean,y=0,yend=300,col="dodgerblue4",size=1.5)+
+  geom_segment(x=unmatched_mean,xend=unmatched_mean,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
+  scale_x_continuous(breaks=seq(0.13,0.19,0.03))
+fig3e
+#P value
+sum(match_sum$MAF_DPGP3_incl_mono>obs_mean)/1000
+
+####### Independent SNP analysis ######
+
+#Indep SNP analysis####
+indep_pred <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/ld_pruned/clumping/clumped_r0.4_10kb.clumped",head=T)
+names(indep_pred)[3] <- "Predictor"
+dd2b <- merge(dd2,indep_pred[3],by="Predictor")
+
+#Quantiles of LHM MAF
+MAF_quantiles <- levels(cut2(dd2b$MAF.resid,g = 20))
+tmp <- vector("numeric")
+for (i in 1:20){
+  tmp[i] <- strsplit(MAF_quantiles,split=",")[[i]]
+}
+tmp2 <- vector("numeric")
+for (i in 1:20){
+  tmp2[i] <- strsplit(tmp,split="\\[")[[i]][2]
+}
+MAF_quantiles <- as.numeric(c(tmp2,0.25359))
+
+#Quantiles of P-values
+Pval_quantiles <- levels(cut2(dd2b$Wald_P,g = 100))
+tmp <- vector("numeric")
+for (i in 1:100){
+  tmp[i] <- strsplit(Pval_quantiles,split=",")[[i]]
+}
+tmp2 <- vector("numeric")
+for (i in 1:100){
+  tmp2[i] <- strsplit(tmp,split="\\[")[[i]][2]
+}
+Pval_quantiles <- as.numeric(c(tmp2,0.99979))
+
+#Select non-antagonistic MAFs
+dd2b.s <- subset(dd2b,!is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))
+set.seed(123)
+tmp <- matrix(data=NA,nrow=1,ncol=4)
+tmp1 <- matrix(data=NA,nrow=20,ncol=100)
+tmp2 <- matrix(data=NA,nrow=20,ncol=100)
+tmp3 <- matrix(data=NA,nrow=20,ncol=100)
+tmp4 <- matrix(data=NA,nrow=20,ncol=100)
+for (i in 1:20){ 
+  for (j in 1:100){
+    tmp <- subset(dd2b.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Wald_P>=Pval_quantiles[j] & Wald_P<=Pval_quantiles[j+1])[sample(1:nrow(subset(dd2b.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Wald_P>=Pval_quantiles[j] & Wald_P<=Pval_quantiles[j+1])),size=1),c("MAF_DPGP3_incl_mono","MAF.resid","Wald_P","fdr")]
+    #tmp1 = MAF in the DPGP3
+    tmp1[i,j] <- ifelse(length(tmp[1])>0,as.numeric(tmp[1]),NA)
+    #tmp2 = MAF in LHm
+    tmp2[i,j] <- ifelse(length(tmp[2])>0,as.numeric(tmp[2]),NA)
+    #tmp3 = Wald P-value
+    tmp3[i,j] <-ifelse(length(tmp[3])>0,as.numeric(tmp[3]),NA)
+    #tmp4 = FDR value
+    tmp4[i,j] <- ifelse(length(tmp[4])>0,as.numeric(tmp[4]),NA)
+  }
+  print(i)
+}
+maf.dpgp3 <- data.frame(tmp1)
+init.dpgp3 <- data.frame(tmp2)
+pvals.dpgp3 <- data.frame(tmp3)
+fdr.dpgp3 <- data.frame(tmp4)
+
+#Aggregate MAF_DGRP by P-value quantile (column-wise)
+indep_sum <- data.frame(apply(maf.dpgp3,2,"mean",na.rm=T),apply(init.dpgp3,2,"mean",na.rm=T),apply(pvals.dpgp3,2,"mean",na.rm=T),apply(fdr.dpgp3,2,"mean",na.rm=T))
+names(indep_sum) <- c("MAF_DPGP3_incl_mono","MAF.resid","Wald_P","fdr")
+
+#Plot
+fig3f <- ggplot(indep_sum,aes(y=MAF_DPGP3_incl_mono,x=1:100*20))+
+  theme_bw()+
+  geom_point(size=3)+
+  geom_smooth(method="lm",col="black",fill="gray75")+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("")+
+  scale_x_continuous(breaks=c(1,1000,2000))
+fig3f
+
+#Statistical test: is there negative correlation between MAF-DPGP3 and Pval?
+maf2 <- unlist(maf.dpgp3)
+init2 <- unlist(init.dpgp3)
+pvals2 <- unlist(pvals.dpgp3)
+fdr2 <- unlist(fdr.dpgp3)
+df <- data.frame(cbind(maf2,init2,pvals2,fdr2))
+cor.test(df$maf2,df$pvals2,method="spearman")
+#Negative correlation, rho=-0.07003042, P=0.001726
+
