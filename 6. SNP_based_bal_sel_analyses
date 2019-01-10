@@ -716,3 +716,8 @@ df <- data.frame(cbind(maf2,init2,pvals2,fdr2))
 cor.test(df$maf2,df$pvals2,method="spearman")
 #Negative correlation, rho=-0.07003042, P=0.001726
 ----- R code -----
+
+
+#########################
+## LD-based analyses
+#########################
