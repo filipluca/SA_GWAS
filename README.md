@@ -1,6 +1,6 @@
 # SA GWAS (2018)
 
-#### Phenotype and quant. gen analysis
+#### 1. Phenotype and quant. gen analysis
 
 -Male and female fitness data QC
 
@@ -12,7 +12,7 @@
 
 -Male and female fitness plot + antagonistic index overlay
 
-#### Genotype quality control
+#### 2. Genotype quality control
 
 -Depth and GQ filtering
 
@@ -22,7 +22,13 @@
 
 -Examination of pairwise relatedness between individuals
 
-#### Association mapping
+#### 3. LHm pop gen
+
+-LD in LHm
+
+-PCA within LHm
+
+#### 4. Association mapping
 
 -LDAK mixed model association analysis
 
