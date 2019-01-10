@@ -1,3 +1,10 @@
 # SA_GWAS
-## TBA
-### TBD
+### Phenotype 
+
+Text
+
+### Genotype quality control
+
+### Association mapping
+
+### Functional analyses
