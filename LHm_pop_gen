@@ -42,6 +42,13 @@ grid.arrange(p1,p2)
 ## LD
 ###############
 
+
+## Pairwise LD, consider SNPs up to 100kb from one another, consider SNPs with r2 values from 0 to 1
+plink --noweb --r2 --ld-window-r2 0 --ld-window-kb 1000 --bfile f3c.lhm.snp --out ld_lhm_1ook
+mv ld_lhm.ld f3c.lhm.snp.ld
+rm ld_lhm.log
+rm ld_lhm.nosex
+
 ----- R code -----
 #Import LD values, LHM
 ld_lhm <- read.table("~/Documents/data/pop_gen/ld/ld_lhm_1m.ld",head=T)
