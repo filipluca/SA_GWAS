@@ -181,3 +181,25 @@ points(data.table.for.GWAS$Fit_pred_conc[data.table.for.GWAS$IID=="H046"], data.
 write.table(data.table.for.GWAS, file="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt", quote=F, row.names=F, sep="\t")
 
 ----- R code -----
+
+
+##################################################
+## PLOTTING PHENOTYPE DATA
+##################################################
+
+----- R code -----
+pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
+
+#Antagonism index
+ggplot(pheno,aes(Fit_mean_female,Fit_mean_male,col=Fit_mean_antF))+
+  geom_hline(yintercept = 0,linetype="dashed",col="black")+
+  geom_vline(xintercept = 0,linetype="dashed",col="black")+
+  geom_point(size=4.5)+
+  xlab("Relative female fitness")+
+  ylab("Relative male fitness")+
+  theme_bw()+
+  theme(axis.title = element_text(size=25),axis.text = element_text(size=25),legend.position = "none")+
+  xlim(c(-1.51,1.95))+
+  ylim(c(-1.51,1.95))+
+  scale_colour_gradientn(colours = c("red","steelblue1"),values=c(1.0,0))
+----- R code -----
