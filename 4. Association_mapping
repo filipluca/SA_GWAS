@@ -305,3 +305,14 @@ estlambda(assoc$Empirical_p,method="median")
 
 write.table(assoc,"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/assoc_mixed_model/mm.assoc4",quote=F,row.names=F)
 ----- R code -----
+
+########################################
+## Number of independent clumps
+########################################
+
+----- R code -----
+names(assoc)[2] <- "SNP"
+#write.table(assoc,"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/assoc_mixed_model/mm.assoc2",quote=F,row.names=F)
+----- R code -----
+
+plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1 0.00092903 --clump-p2 0.1 --clump-kb 10 --clump-r2 0.4 --clump-field Wald_P --out clumped_highly_associated_r0.4_10kb
