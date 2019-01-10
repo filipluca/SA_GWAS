@@ -44,7 +44,7 @@
 
 -LD clumping
 
-#### Functional analyses
+#### 5. Functional analyses
 
 -SNP heritability of antagonistic index
 
@@ -56,7 +56,7 @@
 
 -Candidate vs. non candidate comparisons by X/A and variant effect cateogries
 
-#### SNP-based bal sel analyses
+#### 6. SNP-based bal sel analyses
 
 -Convert recombination rate and linked selection estimates to r6
 
@@ -70,7 +70,7 @@
 
 -MAF for independent SNPs across whole spectrum of P-values
 
-#### Window-based bal sel analyses
+#### 7. Window-based bal sel analyses
 
 
 
