@@ -56,6 +56,10 @@
 
 -Candidate vs. non candidate comparisons by X/A and variant effect cateogries
 
+-Candidate genes: GO analysis
+
+-Candidate genes: sex-biased expression
+
 #### 6. SNP-based bal sel analyses
 
 -Convert recombination rate and linked selection estimates to r6
