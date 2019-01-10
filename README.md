@@ -40,6 +40,8 @@
 
 -QQ-plot
 
+-Permutation-based analysis
+
 -LD clumping
 
 #### Functional analyses
