@@ -251,3 +251,5 @@ ggplot(obs,aes(y=Share,x=Component2,col=factor(pval<0.05)))+
   scale_y_continuous(limits=c(-2,2.2),oob=rescale_none)
 
 ----- R code -----
+
+
