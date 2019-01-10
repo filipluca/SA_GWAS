@@ -24,7 +24,7 @@
 
 #### Association mapping
 
--LDAK mixed model to perform GWAS
+-LDAK mixed model association analysis
 
 -Manhattan plot
 
