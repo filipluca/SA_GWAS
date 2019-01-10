@@ -68,7 +68,7 @@
 
 -Ant. vs. control "matched" analysis
 
--"independent" across whole spectrum of P-values
+-MAF for independent SNPs across whole spectrum of P-values
 
 #### Window-based bal sel analyses
 
