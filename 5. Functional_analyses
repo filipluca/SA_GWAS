@@ -180,64 +180,25 @@ obs <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_ca
 
 ## Permuted share of antagonistic snp heritability per variant effect category
 allperms <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_categories_perm/ant/allperms.share",head=T)
+allperms$Component <-factor(allperms$Component, levels=c("Share_K1","Share_K2","Share_K3","Share_K4","Share_K5","Share_K6","Share_K7","Share_K8","Share_K9","Share_K10"))
 
-#Plot 
-K1.share <- as.numeric(as.character(subset(allperms,Component=="Share_K1")$Share))
-K1.q025 <- quantile(K1.share,0.025)
-K1.q975 <- quantile(K1.share,0.975)
-K1.mean <- mean(K1.share)
-K1.pval <- sum(abs(K1.share)>abs(obs$Share[1]))/1000
-K2.share <- as.numeric(as.character(subset(allperms,Component=="Share_K2")$Share))
-K2.q025 <- quantile(K2.share,0.025)
-K2.q975 <- quantile(K2.share,0.975)
-K2.mean <- mean(K2.share)
-K2.pval <- sum(abs(K2.share)>abs(obs$Share[2]))/1000
-K3.share <- as.numeric(as.character(subset(allperms,Component=="Share_K3")$Share))
-K3.q025 <- quantile(K3.share,0.025)
-K3.q975 <- quantile(K3.share,0.975)
-K3.mean <- mean(K3.share)
-K3.pval <- sum(abs(K3.share)>abs(obs$Share[3]))/1000
-K4.share <- as.numeric(as.character(subset(allperms,Component=="Share_K4")$Share))
-K4.q025 <- quantile(K4.share,0.025)
-K4.q975 <- quantile(K4.share,0.975)
-K4.mean <- mean(K4.share)
-K4.pval <- sum(abs(K4.share)>abs(obs$Share[4]))/1000
-K5.share <- as.numeric(as.character(subset(allperms,Component=="Share_K5")$Share))
-K5.q025 <- quantile(K5.share,0.025)
-K5.q975 <- quantile(K5.share,0.975)
-K5.mean <- mean(K5.share)
-K5.pval <- sum(abs(K5.share)>abs(obs$Share[5]))/1000
-K6.share <- as.numeric(as.character(subset(allperms,Component=="Share_K6")$Share))
-K6.q025 <- quantile(K6.share,0.025)
-K6.q975 <- quantile(K6.share,0.975)
-K6.mean <- mean(K6.share)
-K6.pval <- sum(abs(K6.share)>abs(obs$Share[6]))/1000
-K7.share <- as.numeric(as.character(subset(allperms,Component=="Share_K7")$Share))
-K7.q025 <- quantile(K7.share,0.025)
-K7.q975 <- quantile(K7.share,0.975)
-K7.mean <- mean(K7.share)
-K7.pval <- sum(abs(K7.share)>abs(obs$Share[7]))/1000
-K8.share <- as.numeric(as.character(subset(allperms,Component=="Share_K8")$Share))
-K8.q025 <- quantile(K8.share,0.025)
-K8.q975 <- quantile(K8.share,0.975)
-K8.mean <- mean(K8.share)
-K8.pval <- sum(abs(K8.share)>abs(obs$Share[8]))/1000
-K9.share <- as.numeric(as.character(subset(allperms,Component=="Share_K9")$Share))
-K9.q025 <- quantile(K9.share,0.025)
-K9.q975 <- quantile(K9.share,0.975)
-K9.mean <- mean(K9.share)
-K9.pval <- sum(abs(K9.share)>abs(obs$Share[9]))/1000
-K10.share <- as.numeric(as.character(subset(allperms,Component=="Share_K10")$Share))
-K10.q025 <- quantile(K10.share,0.025)
-K10.q975 <- quantile(K10.share,0.975)
-K10.mean <- mean(K10.share)
-K10.pval <- sum(abs(K10.share)>abs(obs$Share[10]))/1000
+share <- list()
+q025 <- list()
+q975 <- list()
+mean <- list()
+pval <- list()
+for (i in 1:10){
+  share[[i]] <- as.numeric(as.character(subset(allperms,Component==levels(allperms$Component)[i])$Share))
+  q025[[i]] <- quantile(share[[i]],0.025)
+  q975[[i]] <- quantile(share[[i]],0.975)
+  mean[[i]] <- mean(share[[i]])
+  pval[[i]] <- sum(abs(share[[i]])>abs(obs$Share[i]))/1000
+}
 
-
-obs$q025 <- c(K1.q025,K2.q025,K3.q025,K4.q025,K5.q025,K6.q025,K7.q025,K8.q025,K9.q025,K10.q025)
-obs$q975 <- c(K1.q975,K2.q975,K3.q975,K4.q975,K5.q975,K6.q975,K7.q975,K8.q975,K9.q975,K10.q975)
-obs$mean <- c(K1.mean,K2.mean,K3.mean,K4.mean,K5.mean,K6.mean,K7.mean,K8.mean,K9.mean,K10.mean)
-obs$pval <- c(K1.pval,K2.pval,K3.pval,K4.pval,K5.pval,K6.pval,K7.pval,K8.pval,K9.pval,K10.pval)
+obs$q025 <- unlist(q025)
+obs$q975 <- unlist(q975)
+obs$mean <- unlist(mean)
+obs$pval <- unlist(pval)
 obs$Component2 <-  factor(c("3' UTR","5' UTR","Downstream","Intergenic","Intron","Missense","Non-coding transcript exon","Splice region","Synonymous","Upstream"))
 #obs <- obs[order(obs$Component2),]
 obs$Component2<-factor(obs$Component2, levels=c("Upstream","Synonymous","Splice region","Non-coding transcript exon","Missense","Intron","Intergenic","Downstream","5' UTR","3' UTR"))
