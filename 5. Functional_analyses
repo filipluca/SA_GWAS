@@ -153,7 +153,7 @@ for i in {1..10}; do ../ldak5.mac --calc-kins reml_categories --bfile f3c.lhm.sn
 ----- R code -----
 set.seed(123)
 for (j in 1:1000){
-v <- c(veps.sub$Predictor,veps.sub$Predictor)
+v <- c(as.character(veps.sub$Predictor),as.character(veps.sub$Predictor))
 st <- which(veps.sub$Predictor==sample(veps.sub$Predictor,size=1))
 perm_v <- v[st:(st+(765370-1))]
 perm_d <- data.frame(perm_v,veps.sub$Consequence)
