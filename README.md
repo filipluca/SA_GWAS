@@ -1,4 +1,4 @@
-# SA GWAS (2018)
+# SA GWAS
 
 #### 1. Phenotype and quant. gen analysis
 
