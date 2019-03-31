@@ -41,6 +41,7 @@ assoc$fdr <- p.adjust(assoc$Wald_P,"BH")
 assoc$Chromosome_numeric <- assoc$Chromosome
 levels(assoc$Chromosome_numeric) <- 1:5
 assoc$Chromosome_numeric <- as.numeric(as.character(assoc$Chromosome_numeric))
+manhattan(assoc,chr="Chromosome_numeric",bp="Basepair",snp="Predictor",p="Wald_P",chrlabs=c("2L","2R","3L","3R","X"),cex = 0.4,col = c("blue4", "orange3"),suggestiveline = F,genomewideline = min(-log10(assoc$Wald_P)[assoc$fdr<0.3]),cex.lab=2,cex.axis=2,mar=c(5,5,5,5),ylim=c(0,7.2))
 
 ## QQ-plot
 ord <- order(assoc[,7])
