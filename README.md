@@ -90,7 +90,15 @@
 
 -Compare pairwise LD between antagonistic sites relative to non-antagonistic sites
 
-#### 8. Data files
+#### 8. SNP-based bal sel analyses (Dsim, Dyak)
+
+-Import allele frequencies for two D. simulans datasets and one D. yakuba dataset
+
+-Comparison of antagonistic and non-antagonistic MAF while correcting for MAF ascertainemnt bias and linked selection
+
+-Relationship between GWAS effect size and probability that SNP is polymorphic, correcting for MAF ascertainemnt bias and linked selection
+
+#### 9. Data files
 
 -Code used to produce summary data files. These data files are sufficient to reproduce the figures presented in the manuscript.
 
