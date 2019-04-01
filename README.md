@@ -22,7 +22,7 @@
 
 #### 3. LHm pop gen
 
--Examination of pairwise relatedness between individuals
+-Pairwise relatedness between individuals
 
 -LD in LHm
 
