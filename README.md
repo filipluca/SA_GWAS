@@ -4,13 +4,13 @@
 
 -Male and female fitness data QC
 
--Estimation of male and female heritability using animal model (MCMCglmm)
+-Male and female heritability and rmf estimation using MCMCglmm
 
--Estimation of intersexual genetic correlation for fitness
+-SNP heritability of the antagonism index
 
--Definition of an antagonistic index
+-Define rotated matrix to map antagonism/concordant fitness effects of each line
 
--Male and female fitness plot + antagonistic index overlay
+-Male and female fitness plot + antagonism index overlay
 
 #### 2. Genotype quality control
 
@@ -20,13 +20,11 @@
 
 -PCA including outgroup population (DGRP) to identify outliers
 
--Examination of pairwise relatedness between individuals
-
 #### 3. LHm pop gen
 
--LD in LHm
+-Examination of pairwise relatedness between individuals
 
--PCA within LHm
+-LD in LHm
 
 #### 4. Association mapping
 
@@ -34,47 +32,65 @@
 
 -Manhattan plot
 
+-QQ-plot
+
 -P-value histogram
 
 -FDR estimation
 
--QQ-plot
+-Comparison of antagonistic and concordant P-values and Q-values
 
 -Permutation-based analysis
 
--LD clumping
+-LD clumping to identify number of independent hits
 
 #### 5. Functional analyses
 
--SNP heritability of antagonistic index
-
--Partitioning heritability into 1/2 genome
-
 -Partitioning heritability into autosome vs. X
+
+-Antagonistic vs. non-antagonistic candidates on autosome vs. X 
 
 -Partitioning heritability into variant effect categories
 
--Candidate vs. non candidate comparisons by X/A and variant effect cateogries
+-Antagonistic vs. non-antagonistic candidates among variant effect categories
 
--Candidate genes: GO analysis
+-Antagonistic genes: GO analysis
 
--Candidate genes: sex-biased expression
+-Antagonistic genes: sex-biased expression
 
-#### 6. SNP-based bal sel analyses
+-Antagonistic genes: pleiotropy
 
--Convert recombination rate and linked selection estimates to r6
+#### 6. SNP-based bal sel analyses (Dmel)
 
 -Convert Genome Nexus dasta files to vcf format and r6 coordinates
 
--Estimate allele frequencies across populations, including sites that are monomorphic in the population but polymorphic in LHm
+-Estimate minor allele frequencies in three populations (DGRP, ZI, SA), including sites that are monomorphic in the population of interest but polymorphic in LHm (MAF=0)
 
--Ant. vs. control MAF spectrum
+-Incoporate linked selection / recombination rate estimates
 
--Ant. vs. control "matched" analysis
+-Plot MAF spectrum at LD-pruned antagonistic vs. non-antagonistic SNPs
 
--MAF for independent SNPs across whole spectrum of P-values
+-Comparison of antagonistic and non-antagonistic MAF while correcting for MAF ascertainemnt bias and linked selection ('Analysis A')
 
-#### 7. Window-based bal sel analyses
+-Relationship between GWAS effect size and probability that SNP is polymorphic, correcting for MAF ascertainemnt bias and linked selection ('Analysis B')
 
+-Relationship between GWAS effect size and MAF, correcting for MAF ascertainemnt bias and linked selection ('Analysis C')
 
+#### 7. Window- and LD-based bal sel analyses
+
+-Import 'antagonistic windows'
+
+-Calculate Tajima's D values in sliding windows
+
+-Calculate Fst values in sliding windows
+
+-Model Tajima's D and Fst as a function of antagonistic/non-antagonistic status + include LS as covariate
+
+-Estimate LD between pairs of sites in ZI 
+
+-Compare pairwise LD between antagonistic sites relative to non-antagonistic sites
+
+#### 8. Data files
+
+-Code used to produce summary data files. These data files are sufficient to reproduce the figures presented in the manuscript.
 
