@@ -99,8 +99,8 @@ plink --noweb --bfile f2.dgrp --exclude dupeSNP.txt --make-bed --geno 0.05 --maf
 
 ----- R code -----
 #make file which contains predictors which overlap between Nine and LHM, filtered for MAF<0.05
-dgrp.bim <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/f2c.dgrp.bim")
-lhm.bim <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2c.lhm.snp.bim")
+dgrp.bim <- read.table(paste0(dir,"f2c.dgrp.bim"))
+lhm.bim <- read.table(paste0(dir,"f2c.lhm.snp.bim"))
 #merge by Predictor
 overlap.bim <- merge(dgrp.bim,lhm.bim,by=c("V2"))
 overlap.bim$V5.x <- as.character(overlap.bim$V5.x)
@@ -135,24 +135,7 @@ plot(thin[thin$pop=="LHM",c(3,4)],col="dark grey",pch=19,xlab=c("PC1"),ylab=c("P
 points(thin[thin$pop=="DGRP",c(3,4)],col="red",pch=4,xlab=c("PC1"),ylab=c("PC2"),cex.lab=2,cex=1.4,cex.axis=2,xlim=c(-0.06,0.09),ylim=c(-0.14,0.1))
 legend(-0.15,0.12,legend=c(expression("LH"[M]),"RAL"),col=c("dark grey","red"),pch=c(19,4),pt.cex = 1.5,bty="n",y.intersp=1,x.intersp=0.5,cex=1.7)
 
-#PC Loadings
-load <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/merged_dgrp_lhm_maf5/thin.load",head=T)
-lhm.bim <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2b.lhm.snp.bim")
-names(lhm.bim)[2] <- "Predictor"
-load2 <- merge(load,lhm.bim,by="Predictor",all.x=T)
-load2 <- load2[order(load2$V1,load2$V4),]
-rownames(load2) <- NULL
-load2$Predictor_numeric <- as.numeric(as.character(rownames(load2)))
-load2$V1 <- factor(load2$V1)
-levels(load2$V1) <- c("2L","2R","3L","3R","X")
-#library(ggplot2)
-p1 <- ggplot(subset(load2,!is.na(V1)),aes(Predictor_numeric,Axes_1,col=V1))+geom_point()+xlab("Predictor")+ylab("PC1")
-p1
-p2 <- ggplot(subset(load2,!is.na(V1)),aes(Predictor_numeric,Axes_2,col=V1))+geom_point()+xlab("Predictor")+ylab("PC2")
-p2
-grid.arrange(p1,p2)
 ----- /R code -----
-
 
 ## Based on PCA, remove outlier individual
 plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --remove outlier.txt --make-bed --out f3c.lhm.snp
