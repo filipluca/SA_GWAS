@@ -8,6 +8,8 @@ library(data.table)
 library(reshape2)
 library(MCMCglmm)
 
+dir <- "~/Desktop/PloS_Biol_revision/"
+
 ##################################################
 ## PREPARING AND NORMALISING GWAS PHENOTYPE DATA
 ##################################################
@@ -15,7 +17,7 @@ library(MCMCglmm)
 ###### FEMALES ######
 
 # Female raw fitness data.
-fdata <- read.csv("~/Documents/data/GWAS_data/phenotype_data/raw_fitness_data/raw_female_fitness_data.csv")
+fdata <- read.csv(paste0(dir,"raw_female_fitness_data.csv"))
 
 # Change 1 or 0 egg counts to NA 
 fdata.tmp <- fdata[,4:8]
@@ -61,7 +63,7 @@ summary(aov(eggs_st_norm~factor(genome), data=subset(fdata,!is.na(eggs_st_norm))
 
 # Male raw fitness data.
 # Female raw fitness data.
-mdata <- read.csv("~/Documents/data/GWAS_data/phenotype_data/raw_fitness_data/raw_male_fitness_data.csv")
+mdata <- read.csv(paste0(dir,"raw_male_fitness_data.csv"))
 
 # Recode genotype labels
 mdata$genome <- factor(paste0("H", str_pad(string=as.character(mdata$line), width=3, pad="0")))
@@ -178,16 +180,13 @@ plot(data.table.for.GWAS$Fit_pred_conc, data.table.for.GWAS$Fit_pred_antF)
 points(data.table.for.GWAS$Fit_pred_conc[data.table.for.GWAS$IID=="H046"], data.table.for.GWAS$Fit_pred_antF[data.table.for.GWAS$IID=="H046"], col="red")
 
 
-write.table(data.table.for.GWAS, file="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt", quote=F, row.names=F, sep="\t")
-
------ R code -----
+write.table(data.table.for.GWAS, file=paste0(dir,"pheno.txt"), quote=F, row.names=F, sep="\t")
 
 
 ##################################################
 ## PLOTTING PHENOTYPE DATA
 ##################################################
 
------ R code -----
 pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
 
 #Antagonism index
@@ -202,4 +201,5 @@ ggplot(pheno,aes(Fit_mean_female,Fit_mean_male,col=Fit_mean_antF))+
   xlim(c(-1.51,1.95))+
   ylim(c(-1.51,1.95))+
   scale_colour_gradientn(colours = c("red","steelblue1"),values=c(1.0,0))
------ R code -----
+
+----- /R code -----
