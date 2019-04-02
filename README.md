@@ -6,8 +6,6 @@
 
 -Male and female heritability and rmf estimation using MCMCglmm
 
--SNP heritability of the antagonism index
-
 -Define rotated matrix to map antagonism/concordant fitness effects of each line
 
 -Male and female fitness plot + antagonism index overlay
@@ -27,6 +25,8 @@
 -LD in LHm
 
 #### 4. Association mapping
+
+-SNP heritability of the antagonism index
 
 -LDAK mixed model association analysis
 
