@@ -39,6 +39,20 @@ grid.arrange(p1,p2)
 ----- R code -----
 
 ###############
+## Relatedness
+###############
+
+## Examine relatedness between individuals
+----- R code -----
+kinsm <- read.table('~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier.grm.raw')
+kinsm <- as.matrix(kinsm)
+kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
+kinsm <- as.data.frame(as.numeric(kinsm))
+names(kinsm) <- "V1"
+ggplot(kinsm,aes(V1))+theme_bw()+geom_histogram(fill="grey65",col="white",bins=50)+xlab("Genomic relationship values")+theme(axis.text=element_text(size=25),axis.title=element_text(size=30))
+----- /R code -----
+
+###############
 ## LD
 ###############
 
