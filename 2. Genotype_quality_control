@@ -78,10 +78,10 @@ mv dgrp.plink_compatible.vcf.recode.vcf dgrp.plink_compatible.vcf
 
 ----- R code -----
 #Standardise 'Predictor' ID
-map <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/dgrp.map")
+map <- read.table(paste0(dir,"dgrp.map"))
 map$V2 <- paste(map$V1,map$V4,sep="_")
-write.table(map,"~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/dgrp.map",quote=F,sep="\t",col.names=F,row.names=F)
------ R code -----
+write.table(paste0(map,"dgrp.map",quote=F,sep="\t",col.names=F,row.names=F))
+----- /R code -----
 
 ## Modified map file is renamed to 'dgrp.map', while previous map file is called 'dgrp.old.map'
 
@@ -107,12 +107,12 @@ overlap.bim$V5.x <- as.character(overlap.bim$V5.x)
 overlap.bim$V6.x <- as.character(overlap.bim$V6.x)
 overlap.bim$V5.y <- as.character(overlap.bim$V5.y)
 overlap.bim$V6.y <- as.character(overlap.bim$V6.y)
-#find inconsistent SNPs between Nine and LHM
+#find inconsistent SNPs between DGRP and LHM
 inconsistent <- subset(overlap.bim,(V5.x!=V5.y & V5.x!=V6.y) | (V6.x!=V5.y & V6.x!=V6.y))$V2
 #Remove them
 overlap.clean <- subset(overlap.bim,!(V2 %in% inconsistent))
-#write.table(overlap.clean[1],"~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt",row.names=F,col.names=F,quote=F)
------ R code -----
+#write.table(overlap.clean[1],paste0(dir,"overlap_dgrp_and_lhm_maf5.txt"),row.names=F,col.names=F,quote=F)
+----- /R code -----
 
 ## Overlapping datasets
 plink --noweb --bfile f2c.lhm.snp --extract ~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt --make-bed --out lhm_dgrp_intersect_maf5
@@ -151,20 +151,10 @@ p1
 p2 <- ggplot(subset(load2,!is.na(V1)),aes(Predictor_numeric,Axes_2,col=V1))+geom_point()+xlab("Predictor")+ylab("PC2")
 p2
 grid.arrange(p1,p2)
------ R code -----
+----- /R code -----
 
 
 ## Based on PCA, remove outlier individual
 plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --remove outlier.txt --make-bed --out f3c.lhm.snp
 #765764 SNPs at this stage
-
-## Examine relatedness between individuals
------ R code -----
-kinsm <- read.table('~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier.grm.raw')
-kinsm <- as.matrix(kinsm)
-kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
-kinsm <- as.data.frame(as.numeric(kinsm))
-names(kinsm) <- "V1"
-ggplot(kinsm,aes(V1))+theme_bw()+geom_histogram(fill="grey65",col="white",bins=50)+xlab("Genomic relationship values")+theme(axis.text=element_text(size=25),axis.title=element_text(size=30))
------ R code -----
 
