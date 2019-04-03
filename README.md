@@ -38,11 +38,11 @@
 
 -FDR estimation
 
--Comparison of antagonistic and concordant P-values and Q-values
-
 -Permutation-based analysis
 
 -LD clumping to identify number of independent hits
+
+-Comparison of antagonistic and concordant P-values and Q-values
 
 #### 5. Functional analyses
 
