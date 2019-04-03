@@ -5,7 +5,7 @@ library(qqman)
 library(scales)
 library(qvalue)
 
-dir <- "~/Desktop/PloS_Biology_revision/"
+dir <- "~/Desktop/PloS_Biol_revision/"
 
 #############################
 ## SNP HERITABILITY OF ANTAGONISM INDEX
@@ -71,7 +71,7 @@ sum(all.ant$Share>0.512216)/1000
 ----- R code -----
 ## Import association P-values
 ## Mixed model, using weighted kinship matrix as covariate
-assoc <- read.table(paste0(dir,"mm.assoc",head=T))
+assoc <- read.table(paste0(dir,"mm.assoc"),head=T)
 assoc$Chromosome <- as.factor(assoc$Chromosome)
 ## Plink -> non-plink format
 levels(assoc$Chromosome) <- c("2L","2R","3L","3R","X")
@@ -341,4 +341,50 @@ plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1
 clumps <- read.table(paste0(dir,"clumped_highly_associated_r0.4_10kb.clumped"),head=T)
 nrow(clumps)
 #226
+----- /R code -----
+
+########################################
+## Antagonistic vs. concordant
+########################################
+
+----- R code -----
+## Phenotypic plot
+ggplot(pheno,aes(Fit_mean_female,Fit_mean_male,col=Fit_mean_conc))+
+  geom_hline(yintercept = 0,linetype="dashed",col="black")+
+  geom_vline(xintercept = 0,linetype="dashed",col="black")+
+  geom_point(size=4.5)+
+  scale_size_continuous(range = c(1,6))+
+  xlab("Relative female fitness")+
+  ylab("Relative male fitness")+
+  theme_bw()+
+  theme(axis.title = element_text(size=25),axis.text = element_text(size=25),legend.position = "none")+
+  xlim(c(-1.51,1.95))+
+  ylim(c(-1.51,1.95))+
+  scale_colour_gradientn(colours = c("steelblue1","red"),values=c(1,0))
+----- /R code -----
+
+## Association mixed model of concordant index, using weighted kinship matrix
+../ldak5.mac --linear conc --pheno pheno.txt --bfile f3c.lhm.snp --grm kinships_weighted/kinsm_no_outlier --mpheno 5
+mv conc.* assoc_mixed_model
+
+----- R code -----
+## Import concordant GWAS
+cassoc <- read.table(paste0(dir,"conc.assoc"),head=T)
+cassoc$Chromosome <- as.factor(cassoc$Chromosome)
+levels(cassoc$Chromosome) <- c("2L","2R","3L","3R","X")
+cassoc$fdr <- p.adjust(cassoc$Wald_P,"BH")
+
+## P-value antagonistic vs. concordant histogram 
+assoc$Wald_P_concordant <- cassoc$Wald_P
+assoc$fdr_concordant <- cassoc$fdr
+hist(assoc$Wald_P,breaks=200,ylim=c(0,8000),col=rgb(0,0,1,0.5),main="",xlab="P-value",cex.lab=1.8,cex.axis=1.8)
+hist(assoc$Wald_P_concordant,breaks=200,ylim=c(0,8000),col=rgb(1,0.5,0,0.5),add=T)
+legend(0.45,8000,legend=c("Concordant index","Antagonism index"),fill=c(rgb(1,0.5,0,0.5),rgb(0,0,1,0.5)),cex=1.2,box.lty = 0,bty="n")
+
+## Q-value antagonistic vs. concordant histogram 
+hist(assoc$fdr,breaks=200,ylim=c(0,40000),col=rgb(0,0,1,0.5),main="",xlab="Q-value",cex.lab=1.8,xaxt="n",cex.axis=1.8)
+hist(assoc$fdr_concordant,breaks=50,ylim=c(0,40000),col=rgb(1,0.5,0,0.5),add=T)
+legend(0.45,40000,legend=c("Concordant index","Antagonism index"),fill=c(rgb(1,0.5,0,0.5),rgb(0,0,1,0.5)),cex=1.2,box.lty = 0,bty="n")
+axis(1,at=c(0,0.3,0.4,0.6,0.8,1),cex.axis=1.8)
+abline(v=0.3,lwd=2,lty=3)
 ----- /R code -----
