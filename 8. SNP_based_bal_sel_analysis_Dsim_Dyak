@@ -289,4 +289,205 @@ fig6a <- ggplot(subset(ors,Variable=="Abs_Effect"),aes(y=OR,x=Dataset2,col=Pval)
 
 ## Matched analysis: 'Analysis A' #####
 
+## Dsim, Signor####
+## Compare MAF- and LS-matched antagonistic and non-antagonistic SNPs
+
+## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X")$MAF.resid
+cand_ord.auto <- sort(cand.auto)
+## Create dataframe of autosomal non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.auto <- subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dsim_Signor) & !is.na(MAF.resid) & Chromosome!="X")[,c("MAF.resid","is.transspecific_Dsim_Signor","MAF_Dsim_Signor_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.auto)){                            
+    tmp1[[i]] <- subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.auto <- do.call(rbind,tmp2)
+
+## Create ordered vector of X-linked, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.X <- subset(ddc,fdr<0.3 & Chromosome=="X")$MAF.resid
+cand_ord.X <- sort(cand.X)
+## Create dataframe of X-linked non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.X <- subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dsim_Signor) & !is.na(MAF.resid) & Chromosome=="X")[,c("MAF.resid","is.transspecific_Dsim_Signor","MAF_Dsim_Signor_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.X)){                            
+    tmp1[[i]] <- subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.X <- do.call(rbind,tmp2)
+
+## Combine matched non-antagonistic transspecific proportions for X-linked and autosomal sites
+match.Dsim_Signor <- rbind(match.auto,match.X)
+match.Dsim_Signor <- match.Dsim_Signor[order(match.Dsim_Signor$V4),]
+
+## Aggregate matched non-antagonistic transspecific proportions by simulation number
+match_sum.Dsim_Signor <- aggregate(match.Dsim_Signor$is.transspecific_Dsim_Signor,by=list(match.Dsim_Signor$V4),mean,na.rm=T)
+names(match_sum.Dsim_Signor) <- c("Simulation","is.transspecific_Dsim_Signor")
+
+## Observed antagonistic transspecific proportions
+obs_mean.Dsim_Signor <- mean(subset(ddc,fdr<0.3 & !is.na(is.transspecific_Dsim_Signor) & !is.na(MAF.resid))$is.transspecific_Dsim_Signor,na.rm=T)
+## Observed non-antagonistic transspecific proportions (not corrected for MAF or LS)
+unmatched_mean.Dsim_Signor <- mean(subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dsim_Signor) & !is.na(MAF.resid))$is.transspecific_Dsim_Signor,na.rm=T)
+
+## Histogram
+ggplot(match_sum.Dsim_Signor,aes(is.transspecific_Dsim_Signor))+
+  geom_histogram(fill="grey75",col="white",bins=12)+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("Count")+
+  geom_segment(x=obs_mean.Dsim_Signor,xend=obs_mean.Dsim_Signor,y=0,yend=300,col="dodgerblue4",size=1.5)+
+  geom_segment(x=unmatched_mean.Dsim_Signor,xend=unmatched_mean.Dsim_Signor,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
+  scale_x_continuous(breaks=seq(0.01,0.04,0.01))
+
+## Empirical P value
+sum(match_sum.Dsim_Signor$is.transspecific_Dsim_Signor>obs_mean.Dsim_Signor)/1000
+
+#Dsim, Rogers####
+
+## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X"& depth_Dsim_Rogers==20)$MAF.resid
+cand_ord.auto <- sort(cand.auto)
+## Create dataframe of autosomal non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.auto <- subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dsim_Rogers) & !is.na(MAF.resid) & Chromosome!="X" & depth_Dsim_Rogers==20)[,c("MAF.resid","is.transspecific_Dsim_Rogers","MAF_Dsim_Rogers_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.auto)){                            
+    tmp1[[i]] <- subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.auto <- do.call(rbind,tmp2)
+
+## Create ordered vector of X-linked, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.X <- subset(ddc,fdr<0.3 & Chromosome=="X"& depth_Dsim_Rogers==20)$MAF.resid
+cand_ord.X <- sort(cand.X)
+## Create dataframe of X-linked non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.X <- subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dsim_Rogers) & !is.na(MAF.resid) & Chromosome=="X"& depth_Dsim_Rogers==20)[,c("MAF.resid","is.transspecific_Dsim_Rogers","MAF_Dsim_Rogers_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.X)){                            
+    tmp1[[i]] <- subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.X <- do.call(rbind,tmp2)
+
+## Combine matched non-antagonistic transspecific proportions for X-linked and autosomal sites
+match.Dsim_Rogers <- rbind(match.auto,match.X)
+match.Dsim_Rogers <- match.Dsim_Rogers[order(match.Dsim_Rogers$V4),]
+
+## Aggregate matched non-antagonistic transspecific proportions by simulation number
+match_sum.Dsim_Rogers <- aggregate(match.Dsim_Rogers$is.transspecific_Dsim_Rogers,by=list(match.Dsim_Rogers$V4),mean,na.rm=T)
+names(match_sum.Dsim_Rogers) <- c("Simulation","is.transspecific_Dsim_Rogers")
+
+## Observed antagonistic transspecific proportions
+obs_mean.Dsim_Rogers <- mean(subset(ddc,fdr<0.3 & !is.na(is.transspecific_Dsim_Rogers) & !is.na(MAF.resid) & depth_Dsim_Rogers==20)$is.transspecific_Dsim_Rogers,na.rm=T)
+## Observed non-antagonistic transspecific proportions (not corrected for MAF or LS)
+unmatched_mean.Dsim_Rogers <- mean(subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dsim_Rogers) & !is.na(MAF.resid) & depth_Dsim_Rogers==20)$is.transspecific_Dsim_Rogers,na.rm=T)
+
+## Histogram
+ggplot(match_sum.Dsim_Rogers,aes(is.transspecific_Dsim_Rogers))+
+  geom_histogram(fill="grey75",col="white",bins=12)+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("Count")+
+  geom_segment(x=obs_mean.Dsim_Rogers,xend=obs_mean.Dsim_Rogers,y=0,yend=300,col="dodgerblue4",size=1.5)+
+  geom_segment(x=unmatched_mean.Dsim_Rogers,xend=unmatched_mean.Dsim_Rogers,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
+  scale_x_continuous(breaks=seq(0.01,0.04,0.01))
+
+## Empirical P value
+sum(match_sum.Dsim_Rogers$is.transspecific_Dsim_Rogers>obs_mean.Dsim_Rogers)/1000
+
+#Dyak, Rogers####
+## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X"& depth_Dyak_Rogers==20)$MAF.resid
+cand_ord.auto <- sort(cand.auto)
+## Create dataframe of autosomal non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.auto <- subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dyak_Rogers) & !is.na(MAF.resid) & Chromosome!="X" & depth_Dyak_Rogers==20)[,c("MAF.resid","is.transspecific_Dyak_Rogers","MAF_Dyak_Rogers_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.auto)){                            
+    tmp1[[i]] <- subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.auto <- do.call(rbind,tmp2)
+
+## Create ordered vector of X-linked, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.X <- subset(ddc,fdr<0.3 & Chromosome=="X"& depth_Dyak_Rogers==20)$MAF.resid
+cand_ord.X <- sort(cand.X)
+## Create dataframe of X-linked non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.X <- subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dyak_Rogers) & !is.na(MAF.resid) & Chromosome=="X"& depth_Dyak_Rogers==20)[,c("MAF.resid","is.transspecific_Dyak_Rogers","MAF_Dyak_Rogers_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.X)){                            
+    tmp1[[i]] <- subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.X <- do.call(rbind,tmp2)
+
+## Combine matched non-antagonistic transspecific proportions for X-linked and autosomal sites
+match.Dyak_Rogers <- rbind(match.auto,match.X)
+match.Dyak_Rogers <- match.Dyak_Rogers[order(match.Dyak_Rogers$V4),]
+
+## Aggregate matched non-antagonistic transspecific proportions by simulation number
+match_sum.Dyak_Rogers <- aggregate(match.Dyak_Rogers$is.transspecific_Dyak_Rogers,by=list(match.Dyak_Rogers$V4),mean,na.rm=T)
+names(match_sum.Dyak_Rogers) <- c("Simulation","is.transspecific_Dyak_Rogers")
+
+## Observed antagonistic transspecific proportions
+obs_mean.Dyak_Rogers <- mean(subset(ddc,fdr<0.3 & !is.na(is.transspecific_Dyak_Rogers) & !is.na(MAF.resid) & depth_Dyak_Rogers==20)$is.transspecific_Dyak_Rogers,na.rm=T)
+## Observed non-antagonistic transspecific proportions (not corrected for MAF or LS)
+unmatched_mean.Dyak_Rogers <- mean(subset(ddc,fdr>=0.3 & !is.na(is.transspecific_Dyak_Rogers) & !is.na(MAF.resid) & depth_Dyak_Rogers==20)$is.transspecific_Dyak_Rogers,na.rm=T)
+
+## Histogram
+ggplot(match_sum.Dyak_Rogers,aes(is.transspecific_Dyak_Rogers))+
+  geom_histogram(fill="grey75",col="white",bins=12)+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("Count")+
+  geom_segment(x=obs_mean.Dyak_Rogers,xend=obs_mean.Dyak_Rogers,y=0,yend=300,col="dodgerblue4",size=1.5)+
+  geom_segment(x=unmatched_mean.Dyak_Rogers,xend=unmatched_mean.Dyak_Rogers,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
+  scale_x_continuous(breaks=seq(0.01,0.04,0.01))
+
+## Empirical P value
+sum(match_sum.Dyak_Rogers$is.transspecific_Dyak_Rogers>obs_mean.Dyak_Rogers)/1000
+
 
