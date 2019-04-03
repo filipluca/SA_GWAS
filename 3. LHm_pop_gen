@@ -1,19 +1,23 @@
 ----- R code -----
 library(ggplot2)
 
+dir <- "~/Desktop/PloS_Biology_revision/"
+
 ###############
 ## Relatedness
 ###############
 
 ## Examine relatedness between individuals
-
-kinsm <- read.table('~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier.grm.raw')
+----- R code -----
+kinsm <- read.table(paste0(dir,"kinsm_no_outlier.grm.raw"))
 kinsm <- as.matrix(kinsm)
 kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
 kinsm <- as.data.frame(as.numeric(kinsm))
 names(kinsm) <- "V1"
-ggplot(kinsm,aes(V1))+theme_bw()+geom_histogram(fill="grey65",col="white",bins=50)+xlab("Genomic relationship values")+theme(axis.text=element_text(size=25),axis.title=element_text(size=30))
 
+## Plot
+ggplot(kinsm,aes(V1))+theme_bw()+geom_histogram(fill="grey65",col="white",bins=50)+xlab("Genomic relationship values")+theme(axis.text=element_text(size=25),axis.title=element_text(size=30))
+----- /R code -----
 
 ###############
 ## LD
@@ -21,28 +25,37 @@ ggplot(kinsm,aes(V1))+theme_bw()+geom_histogram(fill="grey65",col="white",bins=5
 
 
 ## Pairwise LD, consider SNPs up to 100kb from one another, consider SNPs with r2 values from 0 to 1
-plink --noweb --r2 --ld-window-r2 0 --ld-window-kb 1000 --bfile f3c.lhm.snp --out ld_lhm_1ook
+plink --noweb --r2 --ld-window-r2 0 --ld-window-kb 1000 --bfile f3c.lhm.snp --out ld_lhm_1m
 mv ld_lhm.ld f3c.lhm.snp.ld
 rm ld_lhm.log
 rm ld_lhm.nosex
 
-#Import LD values, LHM
-ld_lhm <- read.table("~/Documents/data/pop_gen/ld/ld_lhm_1m.ld",head=T)
+----- R code -----
+## Import LD values, LHM
+ld_lhm <- read.table(paste0(dir,"ld_lhm_1m.ld"),head=T)
 ld_lhm <- subset(ld_lhm,CHR_A!="CHR_A")
+## Calculate distance between SNP positions
 ld_lhm$Distance <- as.numeric(as.character(ld_lhm$BP_B))-as.numeric(as.character(ld_lhm$BP_A))
+## Remove distances over 1000bp
 ld_lhm <- subset(ld_lhm,Distance<=1000)
-ld_lhm$Compartment <- ifelse(ld_lhm$CHR_A==5,"X chromosome","Autosomes")
-
+## Split distances into bins of 25bp
 ld_lhm$Distance_Bin <- cut(ld_lhm$Distance,breaks=seq(1,1000,25),labels=F)
-ld_lhm_sum <- aggregate(ld_lhm[c("R2")],by=list(Distance_Bin=ld_lhm$Distance_Bin,Compartment=ld_lhm$Compartment),mean,na.rm=T)
-#Plot
-ggplot(ld_lhm_sum,aes(y=R2,x=Distance_Bin*25,col=Compartment))+
-  scale_color_manual(values=c("dodgerblue4","darkgreen"))+
-  geom_smooth(method="lm",formula = y~log(x),se=F,size=1.75,alpha=0.7,values=c("dodgerblue4","darkgreen"))+
+
+## Calculate mean r-squared in each distance bin
+ld_lhm_sum <- aggregate(ld_lhm[c("R2")],by=list(Distance_Bin=ld_lhm$Distance_Bin),mean,na.rm=T)
+## Convert distances to sensible values
+ld_lhm_sum$Distance_Bin <- ld_lhm_sum$Distance_Bin*25
+## Rename for accuracy
+names(ld_lhm_sum)[1] <- "Distance_Bin_Maximum_value"
+
+## Plot
+ggplot(ld_lhm_sum,aes(y=R2,x=Distance_Bin_Maximum_value))+
+  geom_smooth(method="lm",formula = y~log(x),se=F,size=1.75,alpha=0.7,col=c("dodgerblue4"))+
   theme_bw()+
   xlab("Distance (bp)")+
   ylab(expression(paste("r"[LHM]^2)))+
   theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=25),legend.text = element_text(size=25),legend.key.height=unit(2,"line"),legend.key.width=unit(3,"lines"),legend.background =element_blank(),legend.position = c(0.6,0.8),plot.margin = unit(c(0.75,0.75,0.75,0.75), "cm"))+
-  scale_linetype_manual(values = c("solid","solid"))+
-  geom_point(size=2)
+  scale_linetype_manual(values = c("solid"))+
+  geom_point(size=2,col=c("dodgerblue4"))+
+  ylim(c(0.4,0.8))
 ----- /R code -----
