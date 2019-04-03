@@ -693,12 +693,32 @@ cbat$Fst_SA.ZI.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Cand
 wilcox.test(cbat$Fst_RAL.SA.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
 wilcox.test(cbat$Fst_RAL.ZI.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
 wilcox.test(cbat$Fst_SA.ZI.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
-
+----- /R code-----
 
 ##################
 ## LD analysis
 ##################
 
+## DPGP3
+## Repeat for each relevant chromosome arm
+## Convert VCF to BED
+~/Downloads/plink_mac/plink --vcf r6_modified_no_dp_filter.vcf --make-bed --out r6_modified_no_dp_filter
+
+----- R code -----
+## Rename bim file predictors to Chrom_Pos
+#2L
+bim <- read.table('/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim')
+bim$V1 <- 1
+bim$V2 <- paste(bim$V1,bim$V4,sep="_")
+write.table(bim,'/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim',quote=F,row.names=F,col.names=F,sep="\t")
+----- /R code -----
+
+## Extract SNPs that are present in LHM only
+plink --noweb --bfile r6_modified_no_dp_filter --extract ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/GWAS_predictors.txt --make-bed --out r6_modified_no_dp_filter
+## LD values from BED file
+plink --noweb --r2 --ld-window-r2 0 --ld-window-kb 10 --bfile r6_modified_no_dp_filter --out ld_dpgp3_2L
+
+## Concatenate output from each chromosome arm
 
 ----- R code -----
 #LD analysis, using LD values from DPGP3
