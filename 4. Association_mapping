@@ -336,3 +336,9 @@ names(assoc)[2] <- "SNP"
 ----- /R code -----
 
 plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1 0.00092903 --clump-p2 0.1 --clump-kb 10 --clump-r2 0.4 --clump-field Wald_P --out clumped_highly_associated_r0.4_10kb
+
+----- R code -----
+clumps <- read.table(paste0(dir,"clumped_highly_associated_r0.4_10kb.clumped"),head=T)
+nrow(clumps)
+#226
+----- /R code -----
