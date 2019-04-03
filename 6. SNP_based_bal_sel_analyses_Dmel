@@ -1,178 +1,185 @@
------ R code -----
 library(Rmisc)
 library(Hmisc)
 library(matrixStats)
 library(ggplot2)
 library(gplots)
 library(data.table)
+library(cowplot)
 
 ######################################################
-## RECOMBINATION RATE & LINKED SELECTION
+## r5 windows -> r6 windows
 ######################################################
 
-###### Define windows in r6 coordinates ######
+## Define windows in r6 coordinates
 
 #set chromosome length of longest chromosome
-l_2L     <- 23011544;
-l_2R     <- 21146708;
-l_3L     <- 24543557;
-l_3R     <- 27905053;
-l_X      <- 22422827;
-bins.1k.2L <- as.data.frame( seq(1, l_2L-1000, by=500) ,nm="Pos");
-bins.1k.2L$Chrom <- "2L"
-bins.1k.2R <- as.data.frame( seq(1, l_2R-1000, by=500) ,nm="Pos");
-bins.1k.2R$Chrom <- "2R"
-bins.1k.3L <- as.data.frame( seq(1, l_3L-1000, by=500) ,nm="Pos");
-bins.1k.3L$Chrom <- "3L"
-bins.1k.3R <- as.data.frame( seq(1, l_3R-1000, by=500) ,nm="Pos");
-bins.1k.3R$Chrom <- "3R"
-bins.1k.X <- as.data.frame( seq(1, l_X-1000, by=500) ,nm="Pos");
-bins.1k.X$Chrom <- "X"
-bins.1k <- rbind(bins.1k.2L,bins.1k.2R,bins.1k.3L,bins.1k.3R,bins.1k.X)
-bins.1k <- bins.1k[,c(2,1)]
-write.table(bins.1k,"~/Documents/data/pop_gen/coord_conversion/window_start_end.txt",quote=F,row.names=F,col.names=F)
-
-#Convert r5 chunks to r6 chunks
-coordinate_conversion_function_part1 <- function(infile_path,chrom,outfile_path){
-  infile <- read.table(infile_path)
-  infile$V1 <- chrom
-  names(infile) <- c("Chrom","Pos")
-  #remove scientific notation
-  infile <- format(infile,scientific=F)
-  options(scipen=999)
-  #vcf is 1-based; genome conversion requires 0-based data
-  infile$Pos <- as.numeric(infile$Pos)-1
-  infile$Pos2 <- as.numeric(infile$Pos)+1
-  #make BED-like column 
-  infile$V4 <- paste(infile$Chrom,infile$Pos,sep=":")
-  infile$V5 <- paste(infile$V4,infile$Pos2,sep="-")
-  infile$V6 <- paste("chr",infile$V5,sep="")
-  outfile <- as.data.frame(infile[,6])
-  rm(infile)
-  write.table(outfile,outfile_path,quote=F,col.names=F,row.names=F)}
+  l_2L     <- 23011544;
+  l_2R     <- 21146708;
+  l_3L     <- 24543557;
+  l_3R     <- 27905053;
+  l_X      <- 22422827;
+  bins.1k.2L <- as.data.frame( seq(1, l_2L-1000, by=500) ,nm="Pos");
+  bins.1k.2L$Chrom <- "2L"
+  bins.1k.2R <- as.data.frame( seq(1, l_2R-1000, by=500) ,nm="Pos");
+  bins.1k.2R$Chrom <- "2R"
+  bins.1k.3L <- as.data.frame( seq(1, l_3L-1000, by=500) ,nm="Pos");
+  bins.1k.3L$Chrom <- "3L"
+  bins.1k.3R <- as.data.frame( seq(1, l_3R-1000, by=500) ,nm="Pos");
+  bins.1k.3R$Chrom <- "3R"
+  bins.1k.X <- as.data.frame( seq(1, l_X-1000, by=500) ,nm="Pos");
+  bins.1k.X$Chrom <- "X"
+  bins.1k <- rbind(bins.1k.2L,bins.1k.2R,bins.1k.3L,bins.1k.3R,bins.1k.X)
+  bins.1k <- bins.1k[,c(2,1)]
+  write.table(bins.1k,"~/Documents/data/pop_gen/coord_conversion/window_start_end.txt",quote=F,row.names=F,col.names=F)
   
-coordinate_conversion_function_part2 <- function(original_path,converted_path,error_path,chrom,outfile_path){
-  original.bed <- read.table(original_path)
-  converted.bed <- read.table(converted_path)
-  if(file.exists(error_path)){
-    error.bed <- read.table(error_path)
-    #merge original and converted, in bed format
-    error.bed$error <- TRUE
-    original.bed$names <- rownames(original.bed)
-    names(original.bed)[1] <- "V1"
-    tmp1 <- merge(error.bed,original.bed,by="V1",all.y=T)
-    tmp1$names <- as.numeric(tmp1$names)
-    #order by original rowname
-    tmp1 <- tmp1[order(tmp1$names),]
-    #remove erroneous positions from r5 coords
-    tmp2 <- subset(tmp1,is.na(error))
-    #attach new coords to old coords 
-    original_and_converted <- cbind(tmp2$V1,converted.bed)
-    names(original_and_converted)[c(1,2)] <- c("r5","r6")
-  }else{
-    original_and_converted <- cbind(original.bed[1],converted.bed)
-    names(original_and_converted)[c(1,2)] <- c("r5","r6")
+  #Convert r5 windows to r6 windows
+  coordinate_conversion_function_part1 <- function(infile_path,chrom,outfile_path){
+    infile <- read.table(infile_path)
+    infile$V1 <- chrom
+    names(infile) <- c("Chrom","Pos")
+    #remove scientific notation
+    infile <- format(infile,scientific=F)
+    options(scipen=999)
+    #vcf is 1-based; genome conversion requires 0-based data
+    infile$Pos <- as.numeric(infile$Pos)-1
+    infile$Pos2 <- as.numeric(infile$Pos)+1
+    #make BED-like column 
+    infile$V4 <- paste(infile$Chrom,infile$Pos,sep=":")
+    infile$V5 <- paste(infile$V4,infile$Pos2,sep="-")
+    infile$V6 <- paste("chr",infile$V5,sep="")
+    outfile <- as.data.frame(infile[,6])
+    rm(infile)
+    write.table(outfile,outfile_path,quote=F,col.names=F,row.names=F)}
+  
+  coordinate_conversion_function_part2 <- function(original_path,converted_path,error_path,chrom,outfile_path){
+    original.bed <- read.table(original_path)
+    converted.bed <- read.table(converted_path)
+    if(file.exists(error_path)){
+      error.bed <- read.table(error_path)
+      #merge original and converted, in bed format
+      error.bed$error <- TRUE
+      original.bed$names <- rownames(original.bed)
+      names(original.bed)[1] <- "V1"
+      tmp1 <- merge(error.bed,original.bed,by="V1",all.y=T)
+      tmp1$names <- as.numeric(tmp1$names)
+      #order by original rowname
+      tmp1 <- tmp1[order(tmp1$names),]
+      #remove erroneous positions from r5 coords
+      tmp2 <- subset(tmp1,is.na(error))
+      #attach new coords to old coords 
+      original_and_converted <- cbind(tmp2$V1,converted.bed)
+      names(original_and_converted)[c(1,2)] <- c("r5","r6")
+    }else{
+      original_and_converted <- cbind(original.bed[1],converted.bed)
+      names(original_and_converted)[c(1,2)] <- c("r5","r6")
+    }
+    
+    #bed -> vcf
+    #r5
+    tmp.r5 <- as.data.frame(cbind(do.call(rbind,strsplit(as.character(original_and_converted$r5),split=":"))[,1],do.call(rbind,strsplit(as.character(original_and_converted$r5),split="-"))[,2]))
+    tmp.r5$V1 <- substring(tmp.r5$V1, 4)
+    names(tmp.r5) <- c("Chrom","Pos")
+    tmp.r5$Chrom <- as.factor(tmp.r5$Chrom)
+    tmp.r5$Pos <- as.numeric(as.character(tmp.r5$Pos))
+    #r6
+    tmp.r6 <- as.data.frame(cbind(do.call(rbind,strsplit(as.character(original_and_converted$r6),split=":"))[,1],do.call(rbind,strsplit(as.character(original_and_converted$r6),split="-"))[,2]))
+    tmp.r6$V1 <- substring(tmp.r6$V1, 4)
+    names(tmp.r6) <- c("Chrom.r6","Pos.r6")
+    tmp.r6$Chrom.r6 <- as.factor(tmp.r6$Chrom.r6)
+    tmp.r6$Pos.r6 <- as.numeric(as.character(tmp.r6$Pos.r6))
+    #merge well-formatted new/old coords
+    outfile <- cbind(tmp.r5,tmp.r6)
+    
+    #write out bad loci positions
+    error <- as.data.frame(cbind(do.call(rbind,strsplit(as.character(error.bed$V1),split=":"))[,1],do.call(rbind,strsplit(as.character(error.bed$V1),split="-"))[,2]))
+    if(file.exists(error_path) & nrow(error)>0){
+      error$V1 <- substring(error$V1, 4)
+      names(error) <- c("Chrom","Pos")
+      error$Chrom <- as.factor(error$Chrom)
+      error$Pos <- as.numeric(as.character(error$Pos))
+      error <- rbind(error,outfile[outfile$Chrom.r6!=chrom,1:2])
+      error$Chrom <- 1
+      write.table(error,paste(outfile_path,chrom,"badloci.txt",sep=""),row.names=F,quote=F,col.names=F,sep="\t")}
+    
+    #write out additional bad loci positions
+    error2 <- outfile[outfile$Chrom.r6!=chrom,]
+    if(file.exists(error_path) & nrow(error2)>0){
+      error2$Chrom <- 1
+      write.table(error2[,1:2],paste(outfile_path,chrom,"additionalbadloci.txt",sep=""),row.names=F,quote=F,col.names=F,sep="\t")}
+    
+    #write out r6 positions
+    outfile <- outfile[outfile$Chrom.r6==chrom,]
+    outfile$Chrom.r6 <- 1
+    write.table(outfile[,3:4],paste(outfile_path,chrom,"new_coords.txt",sep=""),row.names=F,quote=F,col.names=F,sep="\t")
   }
   
-  #bed -> vcf
-  #r5
-  tmp.r5 <- as.data.frame(cbind(do.call(rbind,strsplit(as.character(original_and_converted$r5),split=":"))[,1],do.call(rbind,strsplit(as.character(original_and_converted$r5),split="-"))[,2]))
-  tmp.r5$V1 <- substring(tmp.r5$V1, 4)
-  names(tmp.r5) <- c("Chrom","Pos")
-  tmp.r5$Chrom <- as.factor(tmp.r5$Chrom)
-  tmp.r5$Pos <- as.numeric(as.character(tmp.r5$Pos))
-  #r6
-  tmp.r6 <- as.data.frame(cbind(do.call(rbind,strsplit(as.character(original_and_converted$r6),split=":"))[,1],do.call(rbind,strsplit(as.character(original_and_converted$r6),split="-"))[,2]))
-  tmp.r6$V1 <- substring(tmp.r6$V1, 4)
-  names(tmp.r6) <- c("Chrom.r6","Pos.r6")
-  tmp.r6$Chrom.r6 <- as.factor(tmp.r6$Chrom.r6)
-  tmp.r6$Pos.r6 <- as.numeric(as.character(tmp.r6$Pos.r6))
-  #merge well-formatted new/old coords
-  outfile <- cbind(tmp.r5,tmp.r6)
+  #p1
+  infile_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end.txt"
+  outfile_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end.bed"
+  coordinate_conversion_function_part1(infile_path,outfile_path)
   
-  #write out bad loci positions
-  error <- as.data.frame(cbind(do.call(rbind,strsplit(as.character(error.bed$V1),split=":"))[,1],do.call(rbind,strsplit(as.character(error.bed$V1),split="-"))[,2]))
-  if(file.exists(error_path) & nrow(error)>0){
-    error$V1 <- substring(error$V1, 4)
-    names(error) <- c("Chrom","Pos")
-    error$Chrom <- as.factor(error$Chrom)
-    error$Pos <- as.numeric(as.character(error$Pos))
-    error <- rbind(error,outfile[outfile$Chrom.r6!=chrom,1:2])
-    error$Chrom <- 1
-    write.table(error,paste(outfile_path,chrom,"badloci.txt",sep=""),row.names=F,quote=F,col.names=F,sep="\t")}
+  #p2
+  original_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end.bed"
+  converted_path <- "~/Documents/data/pop_gen/coord_conversion/hglft_window.bed"
+  error_path <- "~/Documents/data/pop_gen/coord_conversion/hglft_window.err.txt"
+  outfile_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end_r5_r6.txt"
+  coordinate_conversion_function_part2(original_path,converted_path,error_path,outfile_path)
   
-  #write out additional bad loci positions
-  error2 <- outfile[outfile$Chrom.r6!=chrom,]
-  if(file.exists(error_path) & nrow(error2)>0){
-    error2$Chrom <- 1
-    write.table(error2[,1:2],paste(outfile_path,chrom,"additionalbadloci.txt",sep=""),row.names=F,quote=F,col.names=F,sep="\t")}
-  
-  #write out r6 positions
-  outfile <- outfile[outfile$Chrom.r6==chrom,]
-  outfile$Chrom.r6 <- 1
-  write.table(outfile[,3:4],paste(outfile_path,chrom,"new_coords.txt",sep=""),row.names=F,quote=F,col.names=F,sep="\t")
-}
-
-#p1
-infile_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end.txt"
-outfile_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end.bed"
-coordinate_conversion_function_part1(infile_path,outfile_path)
-
-#p2
-original_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end.bed"
-converted_path <- "~/Documents/data/pop_gen/coord_conversion/hglft_window.bed"
-error_path <- "~/Documents/data/pop_gen/coord_conversion/hglft_window.err.txt"
-outfile_path <- "~/Documents/data/pop_gen/coord_conversion/window_start_end_r5_r6.txt"
-coordinate_conversion_function_part2(original_path,converted_path,error_path,outfile_path)
-
 ## Import windows that have been coordinate converted
-
-chunks <- read.table("~/Documents/data/pop_gen/coord_conversion/window_start_end_r5_r6.txt")
+chunks <- read.table(paste0(dir,"window_start_end_r5_r6.txt"))
 chunks$Predictor <- paste(chunks$V4,chunks$V5,sep = "_")
 names(chunks) <- c("Chrom.r5","BIN_START.r5","BIN_END.r5","Chrom.r6","BIN_START.r6","BIN_END.r6","Predictor")
-
-#Make chunk file that is suitable for LDAK's gene-based test
+  
+## Make window file that is suitable for LDAK's gene-based test
+## keep only windows in r6 coordinates
 chunks_r5 <- chunks[4:7]
+## Plink chromosomes
 levels(chunks_r5$Chrom.r6) <- 1:5
 chunks_r5 <- chunks_r5[order(chunks_r5$Chrom.r6,chunks_r5$BIN_START.r6),]
-#write.table(chunks_r5[c(4,1,2,3)],"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/chunks_r5_v2.txt",quote=F,row.names=F,col.names=F)
+#write.table(chunks_r5[c(4,1,2,3)],paste0(dir,"chunks_r5_v2.txt"),quote=F,row.names=F,col.names=F)
+  
+######################################################
+## Linked selection values
+######################################################
 
-###### Linked selection values ######
+## Imported from Elyashiv et al. 2016
+ls <- read.table(paste0(dir,"LS_map_all_chrom.txt"),head=T)
 
-#ls <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/LS_map_all_chrom.txt",head=T)
-#ls <- merge(ls,chunks,by.x=c("Chrom","BIN_START"),by.y=c("Chrom.r5","BIN_START.r5"),all.x=T)
-
-#write.table(ls,"Documents/data/pop_gen/recombination_rate_linked_selection/LS_map_all_chrom_r5_and_r6.txt",quote=F,row.names=F)
-
-ls <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/LS_map_all_chrom_r5_and_r6.txt",header = T)
-
-###### Recombination rate values ######
-
-#Merge new and old coordinates with LS values
-rr <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/Comeron_tables/recom_all_chrom.txt",head=T)
-
-#split rr dataframe into 1000k bins
-l     <- 27900001;
-win <- 1000;
-step   <- 500;
-bins.1k <- as.data.frame( seq(1, l-win, by=step) );
-names(bins.1k) <- c("BIN_START")
-#Make new column which contains bin
-bins.1k$BIN_RR <- cut(bins.1k$BIN_START,breaks=levels(factor(rr$BIN_RR)),include.lowest = T,labels=F,right=F)
-bins.1k$BIN_RR <- bins.1k$BIN_RR - 1
-bins.1k$BIN_RR <- bins.1k$BIN_RR*100000
-bins.1k$BIN_RR <- bins.1k$BIN_RR+1
-rr <- merge(rr,bins.1k,by="BIN_RR",all=T)
-
-#merge this dataframe with new bins 
-rr <- merge(rr,chunks,by.x=c("Chrom","BIN_START"),by.y=c("Chrom.r5","BIN_START.r5"),all.x=T)
-
-#write.table(rr,"Documents/data/pop_gen/recombination_rate_linked_selection/Comeron_tables/recom_all_chrom_r5_and_r6.txt",quote=F,row.names=F)
-rr <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/Comeron_tables/recom_all_chrom_r5_and_r6.txt",head=T)
------ R code -----
+## Merge r5 LS values with r6 windows
+ls <- merge(ls,chunks,by.x=c("Chrom","BIN_START"),by.y=c("Chrom.r5","BIN_START.r5"),all.x=T)
+write.table(ls,paste0(dir,"LS_map_all_chrom_r5_and_r6.txt"),quote=F,row.names=F)
+  
+ls <- read.table(paste0(dir,"LS_map_all_chrom_r5_and_r6.txt"),header= T)
 
 ######################################################
-## EXTRACT ALLELE FREQUENCIES
+## Recombination rate values
+######################################################
+  
+#Merge new and old coordinates with LS values
+rr <- read.table(paste0(dir,"recom_all_chrom.txt"),head=T)
+  
+## Split rr dataframe into 1K bins
+  l     <- 27900001;
+  win <- 1000;
+  step   <- 500;
+  bins.1k <- as.data.frame( seq(1, l-win, by=step) );
+  names(bins.1k) <- c("BIN_START")
+  ## Make new column which contains bin
+  bins.1k$BIN_RR <- cut(bins.1k$BIN_START,breaks=levels(factor(rr$BIN_RR)),include.lowest = T,labels=F,right=F)
+  bins.1k$BIN_RR <- bins.1k$BIN_RR - 1
+  bins.1k$BIN_RR <- bins.1k$BIN_RR*100000
+  bins.1k$BIN_RR <- bins.1k$BIN_RR+1
+  rr <- merge(rr,bins.1k,by="BIN_RR",all=T)
+  
+## merge this dataframe with new bins 
+rr <- merge(rr,chunks,by.x=c("Chrom","BIN_START"),by.y=c("Chrom.r5","BIN_START.r5"),all.x=T)
+  
+#write.table(rr,paste0(dir,"recom_all_chrom_r5_and_r6.txt"),quote=F,row.names=F)
+rr <- read.table(paste0(dir,"recom_all_chrom_r5_and_r6.txt"),head=T)
+----- /R code -----
+
+######################################################
+## SNP ALLELE FREQUENCIES
 ######################################################
 
 ###### Fasta -> vcf ######
@@ -268,7 +275,9 @@ mkdir r5;
 mv r5.vcf r5;
 rm *.vcf;
 
-###### Coord r5 (dm3) -> r6 ######
+###################################################
+## Convert coord r5 (dm3) allele frequencies to r6 
+###################################################
 
 mkdir coord_conversion;
 mkdir r6;
@@ -278,43 +287,43 @@ cut -f1,2 r5.vcf > chrom_pos.txt
 
 ----- R code -----
 infile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/chrom_pos.txt"
-outfile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/rwandan_X_r5.bed"
+outfile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/dpgp3_2R_r5.bed"
 coordinate_conversion_function_part1(infile_path,"X",outfile_path)
------ R code -----
+----- /R code -----
 
-## Obtain coordinate-converted files ('hglft_dpgp3_2R.bed') and error file ("hglft_dpgp3_2R.err.txt") from UCSC coordinate conversion website
+## Obtain coordinate-converted files ('hglft_dpgp3_2R.bed') and error file ("hglft_dpgp3_2R.err.txt") from UCSC coordinate conversion website (manually)
 
 ----- R code -----
 original_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/dpgp3_2R_r5.bed"
 converted_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/hglft_dpgp3_2R.bed"
 error_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/hglft_dpgp3_2R.err.txt"
 chrom <- "2R"
-outfile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/Rwandan_sequences/dpgp3_2R/vcf/vcf_without_reference/"
+outfile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/"
 coordinate_conversion_function_part2(original_path,converted_path,error_path,"2R",outfile_path)
------ R code -----
+----- /R code -----
 
 ## Replace r5 vcf positions with r6 (if there are no erroneous positions)
 grep '^#' r5.vcf > r6.vcf && grep -v '^#' r5.vcf | cut -f3- | paste 2Rnew_coords.txt - >> r6.vcf; 
 
-## Replace r5 vcf positions with r6 (while removing 1 'erroneous position' file)
+## Replace r5 vcf positions with r6 (while removing one 'erroneous position' file)
 vcftools --vcf r5.vcf --exclude-positions 3Rbadloci.txt --recode --out r5temp;
 mv r5temp.recode.vcf r5temp.vcf;
 grep '^#' r5temp.vcf > r6.vcf && grep -v '^#' r5temp.vcf | cut -f3- | paste 2Rnew_coords.txt - >> r6.vcf;
 rm r5temp*;
 
-## Replace r5 vcf positions with r6 (while removing 2 'erroneous position' files)
+## Replace r5 vcf positions with r6 (while removing two 'erroneous position' files)
 vcftools --vcf r5.vcf --exclude-positions Xbadloci.txt --recode --out r5temp;
 mv r5temp.recode.vcf r5temp.vcf;
 vcftools --vcf r5temp.vcf --exclude-positions Xadditionalbadloci.txt --recode --out r5temp2;
 mv r5temp2.recode.vcf r5temp2.vcf;
 grep '^#' r5temp2.vcf > r6.vcf && grep -v '^#' r5temp2.vcf | cut -f3- | paste Xnew_coords.txt - >> r6.vcf;
 rm r5temp*;
-
 ## Each chromosome arm from each population now contains a file, called 'r6.vcf', which has allele frequencies in r6 coordinates
-## Modify snp-sites vcf format to 'standard' vcf format
+
 ----- R code -----
+## Modify snp-sites vcf format to 'standard' vcf format
 #Import vcf file of interest
-vcf <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dgrp_Chr2R/vcf_snpsites/vcf_without_reference/r6.vcf")
+vcf <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf_snpsites/vcf_without_reference/r6.vcf")
 
 #Sanity check
 plot(rownames(vcf),vcf$V2)
@@ -350,24 +359,25 @@ vcf$V2 <- format(vcf$V2,scientific=F)
 vcf <- vcf[order(vcf$V2),]
 #Replace chromosome column with 1
 vcf$V1 <- 1
-write.table(vcf,"/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dpgp3_2R/vcf/vcf_without_reference/body.vcf",sep="\t",row.names = F,quote=F,col.names=F)
+write.table(vcf,"/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/body.vcf",sep="\t",row.names = F,quote=F,col.names=F)
 
 rm(vcf)
 rm(part1)
 rm(part2)
 rm(part3)
------ R code -----
+----- /R code -----
 
 grep '^#' r6.vcf > header.vcf; cat header.vcf body.vcf > r6/r6_modified_no_dp_filter.vcf; rm body.vcf; rm header.vcf;
 
-####### Estimate allele frequencies #######
+#################################################
+## Estimate allele frequencies 
+#################################################
 
-vcftools --vcf /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_2R/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.vcf --freq --out ~/Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.2R.frq;
+vcftools --vcf /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.vcf --freq --out ~/Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.2R.frq;
 
-####### Get depth information at monomorphic sites which are polymorphic in LHm #######
+## Get depth information at monomorphic sites which are polymorphic in LHm
 
 ----- R code -----
-
 dpgp3.2L <- read.table("Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.2L.frq",header = T,row.names = NULL)
 names(dpgp3.2L) <- c("Chrom","Pos","N_alleles","N_chrom","A1","A2")
 dpgp3.2L$A1_freq <- do.call(rbind,strsplit(as.character(dpgp3.2L$A1),split = ":"))[,2]
@@ -413,22 +423,23 @@ dpgp3.frq$MAF_DPGP3 <- ifelse(dpgp3.frq$A1_freq<dpgp3.frq$A2_freq,dpgp3.frq$A1_f
 dpgp3.frq$MAF_DPGP3 <- as.numeric(dpgp3.frq$MAF_DPGP3)
 #write.table(dpgp3.frq,"Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.all.frq",row.names=F,quote=F)
 
-GWAS.pos <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/assoc_mixed_model/GWAS_positions.r5.txt")
+## Identify positions which require depth information
+
+GWAS.pos <- read.table(paste0(tmp,"GWAS_positions.r5.txt"))
 names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
 GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
 levels(GWAS.pos$Chrom_plink) <- 1:5
 GWAS.pos$Predictor <- paste(GWAS.pos$Chrom_plink,GWAS.pos$Pos.r6,sep="_")
 
-#Import pop freq info and merge with GWAS data
-#DPGP3
-assoc <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/assoc_mixed_model/mm.assoc",head=T)
+## Import pop freq info and merge with GWAS data
+assoc <- read.table(paste0(dir,mm.assoc"),head=T)
 dpgp3.frq <- read.table("Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.all.frq",head=T)
 dpgp3.frq$Chrom_plink <- dpgp3.frq$Chrom
 levels(dpgp3.frq$Chrom_plink) <- 1:5
 dpgp3.frq$Predictor <- paste(dpgp3.frq$Chrom_plink,dpgp3.frq$Pos,sep="_")
 tmp <- Reduce(function(...) merge(...,all.x=T,by="Predictor"),list(assoc,dpgp3.frq,GWAS.pos))
 
-#Keep only positions which need depth information + write them to file
+## Keep only positions which need depth information + write them to file
 GWAS.pos.nodpgp3 <- subset(tmp,is.na(MAF_DPGP3) & !is.na(Chrom.r5) & !is.na(Pos.r5))
 GWAS.pos.nodpgp3 <- GWAS.pos.nodpgp3[order(GWAS.pos.nodpgp3$Chrom.r5,GWAS.pos.nodpgp3$Pos.r5),]
 
@@ -438,7 +449,7 @@ write.table(subset(GWAS.pos.nodpgp3,Chrom.r5=="3L")[c("Chrom.r5","Pos.r5")],"/Vo
 write.table(subset(GWAS.pos.nodpgp3,Chrom.r5=="3R")[c("Chrom.r5","Pos.r5")],"/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr3R/fastas/GWAS_positions_3R_dpgp3.r5.txt",quote=F,row.names=F,col.names=F)
 write.table(subset(GWAS.pos.nodpgp3,Chrom.r5=="X")[c("Chrom.r5","Pos.r5")],"/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_ChrX/fastas/GWAS_positions_X_dpgp3.r5.txt",quote=F,row.names=F,col.names=F)
 
------ R code -----
+----- /R code -----
 
 ## Extract allele frequencies from positions that are polymorphic in LHm but not polymorphic in population of interest
 cd /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2L/fastas/;
@@ -463,56 +474,75 @@ paste *.gwas > missing_gwas_2L.txt;
 rm *.gwas;
 
 ----- R code -----
-#Get information about missing sites
+## Import missing site data
 miss.2L.DPGP3 <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2L/fastas/missing_gwas_2L.txt")
 miss.2R.DPGP3 <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2R/fastas/missing_gwas_2R.txt")
 miss.3L.DPGP3 <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr3L/fastas/missing_gwas_3L.txt")
 miss.3R.DPGP3 <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr3R/fastas/missing_gwas_3R.txt")
 miss.X.DPGP3 <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_ChrX/fastas/missing_gwas_X.txt")
+## X chromosome has 196 individuals; add blank column
 miss.X.DPGP3$V197 <- NA
 miss.DPGP3 <- rbind(miss.2L.DPGP3,miss.2R.DPGP3,miss.3L.DPGP3,miss.3R.DPGP3,miss.X.DPGP3)
 miss.DPGP3 <- cbind(miss.DPGP3,subset(GWAS.pos.nodpgp3,Chrom.r5 %in% c("2L","2R","3L","3R","X"))[c("Chrom.r5","Pos.r5")])
 
-#Summary stats for missing positions
+## Summary stats for missing positions
+## Depth
 miss.DPGP3$N_chrom <- ifelse(miss.DPGP3$Chrom.r5=="X",392-(rowCounts(miss.DPGP3=="N",na.rm=T)*2),394-(rowCounts(miss.DPGP3=="N",na.rm=T)*2))
 miss.DPGP3$Freq_A <- rowCounts(miss.DPGP3=="A",na.rm=T)
 miss.DPGP3$Freq_T <- rowCounts(miss.DPGP3=="T",na.rm=T)
 miss.DPGP3$Freq_C <- rowCounts(miss.DPGP3=="C",na.rm=T)
 miss.DPGP3$Freq_G <- rowCounts(miss.DPGP3=="G",na.rm=T)
+## Is position tri-allelic, has no information, or monomorphic
 miss.DPGP3$Type <- factor(ifelse(rowCounts(miss.DPGP3[201:204]==0,na.rm=T)<3,"tri",ifelse(rowCounts(miss.DPGP3[201:204]==0,na.rm=T)>3,"miss","mono")))
-#Make columns to merge 
+## Allele A1 identity
 miss.DPGP3$A1 <- with(miss.DPGP3,ifelse(Freq_A>0 & Type=="mono","A",ifelse(Freq_T>0 & Type=="mono","T",ifelse(Freq_C>0 & Type=="mono","C",ifelse(Freq_G>0 & Type=="mono","G",NA)))))
+## Allele A2 identity
 miss.DPGP3$A2 <- ifelse(miss.DPGP3$A1 %in% c("A","T","C","G"),0,NA)
+## Number of alleles (1 for monomorphic, 0 for missing, 3 for tri-allelic)
 miss.DPGP3$N_alleles <- ifelse(miss.DPGP3$Type=="mono",1,ifelse(miss.DPGP3$Type=="miss",0,3))
+## 'Frequency' (=0) of A1 monomorphic allele
 miss.DPGP3$A1_freq <- ifelse(miss.DPGP3$Type=="mono",0,NA)
+## 'Frequency' (=NA) of alternative allele
 miss.DPGP3$A2_freq <- NA
+## MAF of monomorphic allele
 miss.DPGP3$MAF_DPGP3 <- ifelse(miss.DPGP3$Type=="mono",0,NA)
+## Merge positions that are missing with r6 coordinates (available in 'GWAS.pos' dataframe)
 miss.DPGP3 <- merge(miss.DPGP3,GWAS.pos,by=c("Chrom.r5","Pos.r5"),all.x=T)
 names(miss.DPGP3)[212:213] <- c("Chrom","Pos")
 dpgp3.frq <- rbind(dpgp3.frq,miss.DPGP3[names(dpgp3.frq)])
 dpgp3.frq <- dpgp3.frq[order(dpgp3.frq$Chrom,dpgp3.frq$Pos),]
-#write.table(dpgp3.frq,"Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.plus.mono.all.frq",quote=F,row.names=F)
------ R code -----
+#write.table(dpgp3.frq,paste0(dir,"dpgp3.no.dp.filter.plus.mono.all.frq"),quote=F,row.names=F)
 
 ######################################################
-## ANTAGONISTIC vs. NON-ANTAGONISTIC
+## ANTAGONISTIC vs. NON-ANTAGONISTIC MAFs
 ######################################################
 
------ R code -----
-#Import GWAS positions
-GWAS.pos <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/GWAS_positions.r5.txt")
+## Import association info
+## Import linked selection and recombination rate values
+## Import allele frequencies from each population
+## These data are needed for analyses A, B and C
+
+## GWAS info ####
+assoc <- read.table(paste0(dir,"mm.assoc"),head=T)
+assoc$Chromosome <- as.factor(assoc$Chromosome)
+levels(assoc$Chromosome) <- c("2L","2R","3L","3R","X")
+assoc$fdr <- p.adjust(assoc$Wald_P,"BH")
+
+
+## LS / RR info ####
+GWAS.pos <- read.table(paste0(dir,"GWAS_positions.r5.txt"))
 names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
 GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
 levels(GWAS.pos$Chrom_plink) <- 1:5
 GWAS.pos$Predictor <- paste(GWAS.pos$Chrom_plink,GWAS.pos$Pos.r6,sep="_")
 
-#Import linked selection values
-ls <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/LS_map_all_chrom_r5_and_r6.txt",header = T)
+## Linked selection table
+ls <- read.table("Desktop/PloS_Biol_revision/LS_map_all_chrom_r5_and_r6.txt",header = T)
 
-#Import recombination rates
-rr <- read.table("Documents/data/pop_gen/recombination_rate_linked_selection/Comeron_tables/recom_all_chrom_r5_and_r6.txt",head=T)
+## Recombination rate table
+rr <- read.table("Desktop/PloS_Biol_revision/recom_all_chrom_r5_and_r6.txt",head=T)
 
-#Link window-based measures with SNP positions
+## Link window-based measures with SNP positions
 GWAS.pos$BIN_START <- cut(GWAS.pos$Pos.r5,breaks=levels(factor(ls$BIN_START)),include.lowest = T,labels=F,right=F)
 GWAS.pos$BIN_START <- GWAS.pos$BIN_START-1
 GWAS.pos$BIN_START <- GWAS.pos$BIN_START*1000
@@ -521,128 +551,428 @@ names(GWAS.pos)[1:2] <- c("Chrom","Pos")
 GWAS.pos <- Reduce(function(...) merge(...,by=c("Chrom","BIN_START"),all.x=T),list(GWAS.pos,ls[c("Chrom","BIN_START","LS")],rr[c("Chrom","BIN_START","RR")]))
 names(GWAS.pos)[c(1,3)] <- c("Chrom.r5","Pos.r5")
 
-#Import allele frequencies in the DPGP3
-dpgp3.frq <- read.table("Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.plus.mono.all.frq",head=T)
 
-#Combine dataframes
-dd2 <- Reduce(function(...) merge(...,all.x=T,by=c("Predictor")),list(assoc,dpgp3.frq[c("N_alleles","N_chrom","A1","A2","A1_freq","A2_freq","MAF_DPGP3","Predictor")],GWAS.pos))
-#Are bi-allelic SNPs the same in LHM and comparison population?
-dd2$Same_alleles <- with(dd2,ifelse((A1.x==A1.y | A1.x==A2.y) & (A2.x==A2.y | A2.x==A1.y),1,0))
-#Remove low depth and tri-allelic sites
-dd2$MAF_DPGP3_filt <- ifelse(dd2$N_chrom<40 | dd2$N_alleles==3,NA,dd2$MAF_DPGP3)
-#If i) bi-allelic + incorrect alleles + good depth, or ii) mono-allelic + good depth, make MAF=0
-dd2$MAF_DPGP3_incl_mono <- ifelse(((dd2$N_alleles==1) | (dd2$N_alleles==2 & dd2$Same_alleles==0)) & dd2$N_chrom>39,0,dd2$MAF_DPGP3_filt)
+## DGRP + SA + ZI allele frequencies ####
+dgrp.frq <- read.table(paste0(dir,"dgrp.no.dp.filter.plus.mono.all.frq"),head=T)
+names(dgrp.frq)[3:8] <- c("N_alleles_DGRP","N_chrom_DGRP","A1_DGRP","A2_DGRP","A1_freq_DGRP","A2_freq_DGRP")
+dpgp3.frq <- read.table(paste0(dir,"dpgp3.no.dp.filter.plus.mono.all.frq"),head=T)
+names(dpgp3.frq)[3:8] <- c("N_alleles_DPGP3","N_chrom_DPGP3","A1_DPGP3","A2_DPGP3","A1_freq_DPGP3","A2_freq_DPGP3")
+sa.frq <- read.table(paste0(dir,"sa.no.dp.filter.plus.mono.all.frq"),head=T)
+names(sa.frq)[3:8] <- c("N_alleles_SA","N_chrom_SA","A1_SA","A2_SA","A1_freq_SA","A2_freq_SA")
 
-#Regress out LS/RR from MAF values
-dd2$MAF.resid[!is.na(dd2$LS) & dd2$Chromosome!="X"] <- glm(data=subset(dd2,!is.na(LS) & Chromosome!="X"),MAF~LS)$residuals
-dd2$MAF.resid[!is.na(dd2$RR) & dd2$Chromosome=="X"] <- glm(data=subset(dd2,!is.na(dd2$RR) & Chromosome=="X"),MAF~RR)$residuals
+## Combine dataframes
+dd <- Reduce(function(...) merge(...,all.x=T,by=c("Predictor")),list(assoc,dgrp.frq[c("N_alleles_DGRP","N_chrom_DGRP","A1_DGRP","A2_DGRP","A1_freq_DGRP","A2_freq_DGRP","MAF_DGRP","Predictor")],dpgp3.frq[c("N_alleles_DPGP3","N_chrom_DPGP3","A1_DPGP3","A2_DPGP3","A1_freq_DPGP3","A2_freq_DPGP3","MAF_DPGP3","Predictor")],sa.frq[c("N_alleles_SA","N_chrom_SA","A1_SA","A2_SA","A1_freq_SA","A2_freq_SA","MAF_SA","Predictor")],GWAS.pos))
 
-####### Matched SNP analysis ######
+## Are bi-allelic SNPs the same in LHM and comparison population?
+dd$Same_alleles_LHm_DGRP <- with(dd,ifelse((A1==A1_DGRP | A1==A2_DGRP) & (A2==A2_DGRP | A2==A1_DGRP),1,0))
+dd$Same_alleles_LHm_DPGP3 <- with(dd,ifelse((A1==A1_DPGP3 | A1==A2_DPGP3) & (A2==A2_DPGP3 | A2==A1_DPGP3),1,0))
+dd$Same_alleles_LHm_SA <- with(dd,ifelse((A1==A1_SA | A1==A2_SA) & (A2==A2_SA | A2==A1_SA),1,0))
+
+## Remove low depth and tri-allelic sites
+dd$MAF_DGRP_filt <- ifelse(dd$N_chrom_DGRP<40 | dd$N_alleles_DGRP==3,NA,dd$MAF_DGRP)
+dd$MAF_DPGP3_filt <- ifelse(dd$N_chrom_DPGP3<40 | dd$N_alleles_DPGP3==3,NA,dd$MAF_DPGP3)
+dd$MAF_SA_filt <- ifelse(dd$N_chrom_SA<40 | dd$N_alleles_SA==3,NA,dd$MAF_SA)
+
+## If bi-allelic different alleles and good depth, or mono-allelic and good depth, make MAF=0
+dd$MAF_DGRP_incl_mono <- ifelse(((dd$N_alleles_DGRP==1) | (dd$N_alleles_DGRP==2 & dd$Same_alleles_LHm_DGRP==0)) & dd$N_chrom_DGRP>39,0,dd$MAF_DGRP_filt)
+dd$MAF_DPGP3_incl_mono <- ifelse(((dd$N_alleles_DPGP3==1) | (dd$N_alleles_DPGP3==2 & dd$Same_alleles_LHm_DPGP3==0)) & dd$N_chrom_DPGP3>39,0,dd$MAF_DPGP3_filt)
+dd$MAF_SA_incl_mono <- ifelse(((dd$N_alleles_SA==1) | (dd$N_alleles_SA==2 & dd$Same_alleles_LHm_SA==0)) & dd$N_chrom_SA>39,0,dd$MAF_SA_filt)
+
+#LS of initial MAF taken into account 
+dd$MAF.resid[!is.na(dd$LS) & dd$Chromosome!="X"] <- glm(data=subset(dd,!is.na(LS) & Chromosome!="X"),MAF~LS)$residuals
+dd$MAF.resid[!is.na(dd$RR) & dd$Chromosome=="X"] <- glm(data=subset(dd,!is.na(RR) & Chromosome=="X"),MAF~RR)$residuals
+----- /R code -----
 
 ## Clump SNPs, in order to avoid autocorrelations between SNPs
------ R code -----
-assoc <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/assoc_mixed_model/mm.assoc",head=T)
-names(assoc)[2] <- "SNP"
-write.table(assoc,"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/assoc_mixed_model/mm.assoc2",quote=F,row.names=F)
------ R code -----
 plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1 1 --clump-p2 1 --clump-kb 10 --clump-r2 0.4 --clump-field Wald_P --out clumped_r0.4_10kb
 
+##########################################
+## Matched SNP analysis ('Analysis A')
+##########################################
 
 ----- R code -----
-matched_pred <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/ld_pruned/clumping/clumped_r0.4_10kb.clumped",head=T)
+## Consider only LD-pruned SNPs
+matched_pred <- read.table(paste0(dir,"clumped_r0.4_10kb.clumped"),head=T)
 names(matched_pred)[3] <- "Predictor"
-dd2c <- merge(dd2,matched_pred[3],by="Predictor")
+ddc <- merge(dd,matched_pred[3],by="Predictor")
 
-#Plot MAF spectrum
-fig3d <- ggplot(dd2c,aes(MAF_DPGP3_incl_mono,fill=factor(dd2c$fdr<0.3)))+
-  geom_density(alpha=0.7,cex=0.75)+
+## DGRP ####
+
+## Plot MAF spectrum (before MAF- and LS-matching)
+fig4a <- ggplot(ddc,aes(MAF_DGRP_incl_mono,fill=factor(ddc$fdr<0.3)))+
+  geom_density(alpha=0.7,cex=0.7)+
   scale_fill_manual(labels = c("Control","Antagonistic"),values=c("darkgrey","dodgerblue4"))+
   theme_bw()+
-  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=10),legend.position="none",legend.key.height=unit(1,"line"),legend.key.width=unit(1,"line"),legend.background =element_blank())+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=20),legend.key.height=unit(2,"line"),legend.key.width=unit(2,"line"),legend.background =element_blank(),legend.position = c(0.65,0.85))+
   xlab("")+
   ylab("")+
-  scale_x_continuous(breaks=seq(0, 0.5, 0.25))
-fig3d
+  scale_x_continuous(breaks = c(0,0.5,0.25))
+fig4a
 
-#Compare matched candidates and non-candidates
-#Use candidate MAFs as vector of quantiles to sample from
-cand.auto <- subset(dd2c,fdr<0.3 & Chromosome!="X")$MAF.resid
+## Compare MAF- and LS-matched antagonistic and non-antagonistic SNPs
+
+## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X")$MAF.resid
 cand_ord.auto <- sort(cand.auto)
-length(cand_ord.auto)
-#Create dataframe of autosomal non-candidates
-dd2c.auto <- subset(dd2c,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid) & Chromosome!="X")[,c("MAF.resid","fdr","MAF_DPGP3_incl_mono")]
-#Sample 1,000 times from this dataframe and match allele frequencies with candidates
+
+## Create dataframe of autosomal non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.auto <- subset(ddc,fdr>=0.3 & !is.na(MAF_DGRP_incl_mono) & !is.na(MAF.resid) & Chromosome!="X")[,c("MAF.resid","fdr","MAF_DGRP_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
 set.seed(123)
 tmp1 <- list()
 tmp2 <- list()
 for (j in 1:1000){
   for (i in 1:length(cand_ord.auto)){                            
-    tmp1[[i]] <- subset(dd2c.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(dd2c.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
+    tmp1[[i]] <- subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
   }
   tmp2[[j]] <- do.call(rbind,tmp1)
   tmp2[[j]][4] <- j
   print(j)
 }
-#Table of matched allele frequencies
 match.auto <- do.call(rbind,tmp2)
 
-#Compare matched candidates and non-candidates
-#Use candidate MAFs as vector of quantiles to sample from
-cand.X <- subset(dd2c,fdr<0.3 & Chromosome=="X")$MAF.resid
+## Create ordered vector of X-linked, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.X <- subset(ddc,fdr<0.3 & Chromosome=="X")$MAF.resid
 cand_ord.X <- sort(cand.X)
-length(cand_ord.X)
-#Create dataframe of autosomal non-candidates
-dd2c.X <- subset(dd2c,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid) & Chromosome=="X")[,c("MAF.resid","fdr","MAF_DPGP3_incl_mono")]
-#Sample 1,000 times from this dataframe and match allele frequencies with candidates
+
+## Create dataframe of X-linked non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.X <- subset(ddc,fdr>=0.3 & !is.na(MAF_DGRP_incl_mono) & !is.na(MAF.resid) & Chromosome=="X")[,c("MAF.resid","fdr","MAF_DGRP_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
 set.seed(123)
 tmp1 <- list()
 tmp2 <- list()
 for (j in 1:1000){
   for (i in 1:length(cand_ord.X)){                            
-    tmp1[[i]] <- subset(dd2c.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(dd2c.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
+    tmp1[[i]] <- subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
   }
   tmp2[[j]] <- do.call(rbind,tmp1)
   tmp2[[j]][4] <- j
   print(j)
 }
-#Table of matched allele frequencies
 match.X <- do.call(rbind,tmp2)
 
-match.dpgp3 <- rbind(match.auto,match.X)
-match.dpgp3 <- match.dpgp3[order(match.dpgp3$V4),]
+## Combine matched non-antagonistic MAFs for X-linked and autosomal sites
+match.dgrp <- rbind(match.auto,match.X)
+match.dgrp <- match.dgrp[order(match.dgrp$V4),]
 
+## Aggregate matched non-antagonistic MAFs by simulation number
+match_sum.dgrp <- aggregate(match.dgrp$MAF_DGRP_incl_mono,by=list(match.dgrp$V4),mean,na.rm=T)
+names(match_sum.dgrp) <- c("Simulation","MAF_DGRP_incl_mono")
 
-#Aggregate matched by simulation #
-#Calculate mean MAF for each simulation and compare to candidate MAF
-match_sum <- aggregate(match.dpgp3$MAF_DPGP3_incl_mono,by=list(match.dpgp3$V4),mean,na.rm=T)
-names(match_sum) <- c("Simulation","MAF_DPGP3_incl_mono")
+## Observed antagonistic MAFs
+obs_mean.dgrp <- mean(subset(ddc,fdr<0.3 & !is.na(MAF_DGRP_incl_mono) & !is.na(MAF.resid))$MAF_DGRP_incl_mono,na.rm=T)
+## Observed non-antagonistic MAFs (without LS- and MAF-matching)
+unmatched_mean.dgrp <- mean(subset(ddc,fdr>=0.3 & !is.na(MAF_DGRP_incl_mono) & !is.na(MAF.resid))$MAF_DGRP_incl_mono,na.rm=T)
 
-obs_mean <- mean(subset(dd2c,fdr<0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))$MAF_DPGP3_incl_mono,na.rm=T)
-unmatched_mean <- mean(subset(dd2c,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))$MAF_DPGP3_incl_mono,na.rm=T)
-
-#Histogram
-fig3e <- ggplot(match_sum,aes(MAF_DPGP3_incl_mono))+
+## Histogram
+fig4b <- ggplot(match_sum.dgrp,aes(MAF_DGRP_incl_mono))+
   geom_histogram(fill="grey75",col="white",bins=30)+
   theme_bw()+
   theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
   xlab("")+
   ylab("")+
-  geom_segment(x=obs_mean,xend=obs_mean,y=0,yend=300,col="dodgerblue4",size=1.5)+
-  geom_segment(x=unmatched_mean,xend=unmatched_mean,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
-  scale_x_continuous(breaks=seq(0.13,0.19,0.03))
-fig3e
-#P value
-sum(match_sum$MAF_DPGP3_incl_mono>obs_mean)/1000
+  geom_segment(x=obs_mean.dgrp,xend=obs_mean.dgrp,y=0,yend=300,col="dodgerblue4",size=1.5)+
+  geom_segment(x=unmatched_mean.dgrp,xend=unmatched_mean.dgrp,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
+  scale_x_continuous(breaks=seq(0.21,0.29,0.03))
+fig4b
 
-####### Independent SNP analysis ######
+## Empirical P value
+sum(match_sum.dgrp$MAF_DGRP_incl_mono>obs_mean.dgrp)/1000
 
-#Indep SNP analysis####
-indep_pred <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/ld_pruned/clumping/clumped_r0.4_10kb.clumped",head=T)
+## DPGP3 ####
+
+## Plot MAF spectrum (before MAF- and LS-matching)
+fig4e <- ggplot(ddc,aes(MAF_DPGP3_incl_mono,fill=factor(ddc$fdr<0.3)))+
+  geom_density(alpha=0.7,cex=0.7)+
+  scale_fill_manual(labels = c("Control","Antagonistic"),values=c("darkgrey","dodgerblue4"))+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=20),legend.key.height=unit(2,"line"),legend.key.width=unit(2,"line"),legend.background =element_blank(),legend.position = c(0.65,0.85))+
+  xlab("")+
+  ylab("")+
+  scale_x_continuous(breaks = c(0,0.5,0.25))
+fig4e
+
+## Compare MAF- and LS-matched antagonistic and non-antagonistic SNPs
+
+## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X")$MAF.resid
+cand_ord.auto <- sort(cand.auto)
+
+## Create dataframe of autosomal non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.auto <- subset(ddc,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid) & Chromosome!="X")[,c("MAF.resid","fdr","MAF_DPGP3_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.auto)){                            
+    tmp1[[i]] <- subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.auto <- do.call(rbind,tmp2)
+
+## Create ordered vector of X-linked, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.X <- subset(ddc,fdr<0.3 & Chromosome=="X")$MAF.resid
+cand_ord.X <- sort(cand.X)
+
+## Create dataframe of X-linked non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.X <- subset(ddc,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid) & Chromosome=="X")[,c("MAF.resid","fdr","MAF_DPGP3_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.X)){                            
+    tmp1[[i]] <- subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.X <- do.call(rbind,tmp2)
+
+## Combine matched non-antagonistic MAFs for X-linked and autosomal sites
+match.dpgp3 <- rbind(match.auto,match.X)
+match.dpgp3 <- match.dpgp3[order(match.dpgp3$V4),]
+
+## Aggregate matched non-antagonistic MAFs by simulation number
+match_sum.dpgp3 <- aggregate(match.dpgp3$MAF_DPGP3_incl_mono,by=list(match.dpgp3$V4),mean,na.rm=T)
+names(match_sum.dpgp3) <- c("Simulation","MAF_DPGP3_incl_mono")
+
+## Observed antagonistic MAFs
+obs_mean.dpgp3 <- mean(subset(ddc,fdr<0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))$MAF_DPGP3_incl_mono,na.rm=T)
+## Observed non-antagonistic MAFs (without LS- and MAF-matching)
+unmatched_mean.dpgp3 <- mean(subset(ddc,fdr>=0.3 & !is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))$MAF_DPGP3_incl_mono,na.rm=T)
+
+## Histogram
+fig4f <- ggplot(match_sum.dpgp3,aes(MAF_DPGP3_incl_mono))+
+  geom_histogram(fill="grey75",col="white",bins=30)+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("")+
+  geom_segment(x=obs_mean.dpgp3,xend=obs_mean.dpgp3,y=0,yend=300,col="dodgerblue4",size=1.5)+
+  geom_segment(x=unmatched_mean.dpgp3,xend=unmatched_mean.dpgp3,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
+  scale_x_continuous(breaks=seq(0.21,0.29,0.03))
+fig4f
+
+## Empirical P value
+sum(match_sum.dpgp3$MAF_DPGP3_incl_mono>obs_mean.dpgp3)/1000
+
+## SA ####
+
+## Plot MAF spectrum (before MAF- and LS-matching)
+fig4i <- ggplot(ddc,aes(MAF_SA_incl_mono,fill=factor(ddc$fdr<0.3)))+
+  geom_density(alpha=0.7,cex=0.7)+
+  scale_fill_manual(labels = c("Control","Antagonistic"),values=c("darkgrey","dodgerblue4"))+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=20),legend.key.height=unit(2,"line"),legend.key.width=unit(2,"line"),legend.background =element_blank(),legend.position = c(0.65,0.85))+
+  xlab("")+
+  ylab("")+
+  scale_x_continuous(breaks = c(0,0.5,0.25))
+fig4i
+
+## Compare MAF- and LS-matched antagonistic and non-antagonistic SNPs
+
+## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X")$MAF.resid
+cand_ord.auto <- sort(cand.auto)
+
+## Create dataframe of autosomal non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.auto <- subset(ddc,fdr>=0.3 & !is.na(MAF_SA_incl_mono) & !is.na(MAF.resid) & Chromosome!="X")[,c("MAF.resid","fdr","MAF_SA_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.auto)){                            
+    tmp1[[i]] <- subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))[sample(1:nrow(subset(ddc.auto,MAF.resid>=cand_ord.auto[i] & MAF.resid<=(cand_ord.auto[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.auto <- do.call(rbind,tmp2)
+
+## Create ordered vector of X-linked, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
+
+cand.X <- subset(ddc,fdr<0.3 & Chromosome=="X")$MAF.resid
+cand_ord.X <- sort(cand.X)
+
+## Create dataframe of X-linked non-antagonistic SNPs that have been MAF- and LS-matched to autosomal antagonistic SNPs 
+ddc.X <- subset(ddc,fdr>=0.3 & !is.na(MAF_SA_incl_mono) & !is.na(MAF.resid) & Chromosome=="X")[,c("MAF.resid","fdr","MAF_SA_incl_mono")]
+#Sample 1,000 times from this dataframe, matching every time
+set.seed(123)
+tmp1 <- list()
+tmp2 <- list()
+for (j in 1:1000){
+  for (i in 1:length(cand_ord.X)){                            
+    tmp1[[i]] <- subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))[sample(1:nrow(subset(ddc.X,MAF.resid>=cand_ord.X[i] & MAF.resid<=(cand_ord.X[i+1]))),size=1),]
+  }
+  tmp2[[j]] <- do.call(rbind,tmp1)
+  tmp2[[j]][4] <- j
+  print(j)
+}
+match.X <- do.call(rbind,tmp2)
+
+## Combine matched non-antagonistic MAFs for X-linked and autosomal sites
+match.sa <- rbind(match.auto,match.X)
+match.sa <- match.sa[order(match.sa$V4),]
+
+## Aggregate matched non-antagonistic MAFs by simulation number
+match_sum.sa <- aggregate(match.sa$MAF_SA_incl_mono,by=list(match.sa$V4),mean,na.rm=T)
+names(match_sum.sa) <- c("Simulation","MAF_SA_incl_mono")
+
+## Observed antagonistic MAFs
+obs_mean.sa <- mean(subset(ddc,fdr<0.3 & !is.na(MAF_SA_incl_mono) & !is.na(MAF.resid))$MAF_SA_incl_mono,na.rm=T)
+## Observed non-antagonistic MAFs (without LS- and MAF-matching)
+unmatched_mean.sa <- mean(subset(ddc,fdr>=0.3 & !is.na(MAF_SA_incl_mono) & !is.na(MAF.resid))$MAF_SA_incl_mono,na.rm=T)
+
+## Histogram
+fig4j <- ggplot(match_sum.sa,aes(MAF_SA_incl_mono))+
+  geom_histogram(fill="grey75",col="white",bins=30)+
+  theme_bw()+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("")+
+  geom_segment(x=obs_mean.sa,xend=obs_mean.sa,y=0,yend=300,col="dodgerblue4",size=1.5)+
+  geom_segment(x=unmatched_mean.sa,xend=unmatched_mean.sa,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
+  scale_x_continuous(breaks=seq(0.21,0.29,0.03))
+fig4j
+
+## Empirical P value
+sum(match_sum.sa$MAF_SA_incl_mono>obs_mean.sa)/1000
+
+##########################################
+## Indep SNP analysis ('Analysis B')
+##########################################
+
+## DGRP ####
+
+## This is the same dataframe as matched_pred (i.e. ddb is the same as ddc)
+indep_pred <- read.table(paste0(dir,"clumped_r0.4_10kb.clumped"),head=T)
 names(indep_pred)[3] <- "Predictor"
-dd2b <- merge(dd2,indep_pred[3],by="Predictor")
+ddb <- merge(dd,indep_pred[3],by="Predictor")
 
-#Quantiles of LHM MAF
-MAF_quantiles <- levels(cut2(dd2b$MAF.resid,g = 20))
+## Logistic regression - how does probability that a SNP is polymorphic vary with absolute effect size? while including LHm MAF and LS as a covariate
+summary(glm(data=ddb,factor(MAF_DGRP_incl_mono>0)~abs(Effect)+MAF+LS,family=binomial))
+## How many LD-independent polymorphic sites?
+table(factor(ddb$MAF_DGRP_incl_mono>0))
+
+## X2 P-value
+mod1 <- glm(data=ddb,factor(MAF_DGRP_incl_mono>0)~abs(Effect)+MAF+LS,family="binomial")
+mod2 <- glm(data=ddb,factor(MAF_DGRP_incl_mono>0)~MAF+LS,family="binomial")
+anova(mod2,mod1,test="Chisq")
+
+## Plot Odds ratios and 95CIs
+mod1 <- glm(data=ddb,factor(MAF_DGRP_incl_mono>0)~abs(Effect)+MAF+LS,family="binomial")
+or1 <- cbind(exp(coef(mod1)),exp(confint(mod1)),c("Intercept","Absolute_Effect","MAF","LS"),rep("DGRP",4))
+or1 <- as.data.frame(or1)
+names(or1) <- c("OR","CI_2.5","CI_97.5","Variable","Dataset")
+
+for (i in (1:3)){
+  or1[,i] <- as.numeric(as.character(or1[,i]))
+}
+or1$Pval <- ifelse(or1$OR<1 & or1$CI_97.5<1,"Sig", ifelse(or1$OR>1 &or1$CI_2.5>1,"Sig","NonSig"))
+
+or1$Dataset2 <- factor(or1$Dataset, levels=levels(or1$Dataset)[c(2,1,3)])
+
+fig4c <- ggplot(subset(or1,Variable=="Absolute_Effect"),aes(y=OR,x=Dataset2,col=Pval))+
+  geom_point(shape=19,size=5,aes(y=OR))+
+  geom_errorbar(aes(ymin=CI_2.5,ymax=CI_97.5),width=.2,cex=1,position=position_dodge(.9),col="black")+
+  scale_color_manual(values=c("dodgerblue4"))+
+  theme_bw()+
+  geom_hline(yintercept=1,linetype="dashed")+
+  theme(legend.title=element_blank(),axis.text.x = element_text(size=20,angle = 70, hjust = 1),axis.text.y = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank(),strip.text=element_text(size=40))+
+  ylab("")+
+  xlab("")+
+  ylim(c(0,25))
+fig4c
+
+## DPGP3 ####
+
+## Logistic regression - how does probability that a SNP is polymorphic vary with absolute effect size? while including LHm MAF and LS as a covariate
+summary(glm(data=ddb,factor(MAF_DPGP3_incl_mono>0)~abs(Effect)+MAF+LS,family=binomial))
+## How many LD-independent polymorphic sites?
+table(factor(ddb$MAF_DPGP3_incl_mono>0))
+
+## X2 P-value
+mod1 <- glm(data=ddb,factor(MAF_DPGP3_incl_mono>0)~abs(Effect)+MAF+LS,family="binomial")
+mod2 <- glm(data=ddb,factor(MAF_DPGP3_incl_mono>0)~MAF+LS,family="binomial")
+anova(mod2,mod1,test="Chisq")
+
+## Plot Odds ratios and 95CIs
+mod1 <- glm(data=ddb,factor(MAF_DPGP3_incl_mono>0)~abs(Effect)+MAF+LS,family="binomial")
+or1 <- cbind(exp(coef(mod1)),exp(confint(mod1)),c("Intercept","Absolute_Effect","MAF","LS"),rep("DPGP3",4))
+or1 <- as.data.frame(or1)
+names(or1) <- c("OR","CI_2.5","CI_97.5","Variable","Dataset")
+
+for (i in (1:3)){
+  or1[,i] <- as.numeric(as.character(or1[,i]))
+}
+or1$Pval <- ifelse(or1$OR<1 & or1$CI_97.5<1,"Sig", ifelse(or1$OR>1 &or1$CI_2.5>1,"Sig","NonSig"))
+
+or1$Dataset2 <- factor(or1$Dataset, levels=levels(or1$Dataset)[c(2,1,3)])
+
+fig4g <- ggplot(subset(or1,Variable=="Absolute_Effect"),aes(y=OR,x=Dataset2,col=Pval))+
+  geom_point(shape=19,size=5,aes(y=OR))+
+  geom_errorbar(aes(ymin=CI_2.5,ymax=CI_97.5),width=.2,cex=1,position=position_dodge(.9),col="black")+
+  scale_color_manual(values=c("dodgerblue4"))+
+  theme_bw()+
+  geom_hline(yintercept=1,linetype="dashed")+
+  theme(legend.title=element_blank(),axis.text.x = element_text(size=20,angle = 70, hjust = 1),axis.text.y = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank(),strip.text=element_text(size=40))+
+  ylab("")+
+  xlab("")+
+  ylim(c(0,10))
+fig4g
+
+## SA ####
+
+## Logistic regression - how does probability that a SNP is polymorphic vary with absolute effect size? while including LHm MAF and LS as a covariate
+summary(glm(data=ddb,factor(MAF_SA_incl_mono>0)~abs(Effect)+MAF+LS,family=binomial))
+## How many LD-independent polymorphic sites?
+table(factor(ddb$MAF_SA_incl_mono>0))
+
+## X2 P-value
+mod1 <- glm(data=ddb,factor(MAF_SA_incl_mono>0)~abs(Effect)+MAF+LS,family="binomial")
+mod2 <- glm(data=ddb,factor(MAF_SA_incl_mono>0)~MAF+LS,family="binomial")
+anova(mod2,mod1,test="Chisq")
+
+## Plot Odds ratios and 95CIs
+mod1 <- glm(data=ddb,factor(MAF_SA_incl_mono>0)~abs(Effect)+MAF+LS,family="binomial")
+or1 <- cbind(exp(coef(mod1)),exp(confint(mod1)),c("Intercept","Absolute_Effect","MAF","LS"),rep("SA",4))
+or1 <- as.data.frame(or1)
+names(or1) <- c("OR","CI_2.5","CI_97.5","Variable","Dataset")
+
+for (i in (1:3)){
+  or1[,i] <- as.numeric(as.character(or1[,i]))
+}
+or1$Pval <- ifelse(or1$OR<1 & or1$CI_97.5<1,"Sig", ifelse(or1$OR>1 &or1$CI_2.5>1,"Sig","NonSig"))
+
+or1$Dataset2 <- factor(or1$Dataset, levels=levels(or1$Dataset)[c(2,1,3)])
+
+fig4k <- ggplot(subset(or1,Variable=="Absolute_Effect"),aes(y=OR,x=Dataset2,col=Pval))+
+  geom_point(shape=19,size=5,aes(y=OR))+
+  geom_errorbar(aes(ymin=CI_2.5,ymax=CI_97.5),width=.2,cex=1,position=position_dodge(.9),col="black")+
+  scale_color_manual(values=c("dodgerblue4"))+
+  theme_bw()+
+  geom_hline(yintercept=1,linetype="dashed")+
+  theme(legend.title=element_blank(),axis.text.x = element_text(size=20,angle = 70, hjust = 1),axis.text.y = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank(),strip.text=element_text(size=40))+
+  ylab("")+
+  xlab("")+
+  ylim(c(0,10))
+fig4k
+
+##########################################
+## Indep SNP analysis ('Analysis C')
+##########################################
+
+## 20 Quantiles of LHM MAF
+MAF_quantiles <- levels(cut2(ddb$MAF.resid,g = 20))
+## Clean up
 tmp <- vector("numeric")
 for (i in 1:20){
   tmp[i] <- strsplit(MAF_quantiles,split=",")[[i]]
@@ -651,22 +981,25 @@ tmp2 <- vector("numeric")
 for (i in 1:20){
   tmp2[i] <- strsplit(tmp,split="\\[")[[i]][2]
 }
-MAF_quantiles <- as.numeric(c(tmp2,0.25359))
+MAF_quantiles <- as.numeric(c(tmp2,0.2536))
 
-#Quantiles of P-values
-Pval_quantiles <- levels(cut2(dd2b$Wald_P,g = 100))
+## 100 Quantiles of Absolute effect Size
+ddb$Abs_Effect <- abs(ddb$Effect)
+ES_quantiles <- levels(cut2(ddb$Abs_Effect,g = 100))
+## Clean up
 tmp <- vector("numeric")
 for (i in 1:100){
-  tmp[i] <- strsplit(Pval_quantiles,split=",")[[i]]
+  tmp[i] <- strsplit(ES_quantiles,split=",")[[i]]
 }
 tmp2 <- vector("numeric")
 for (i in 1:100){
   tmp2[i] <- strsplit(tmp,split="\\[")[[i]][2]
 }
-Pval_quantiles <- as.numeric(c(tmp2,0.99979))
+ES_quantiles <- as.numeric(c(tmp2,0.7246))
 
-#Select non-antagonistic MAFs
-dd2b.s <- subset(dd2b,!is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))
+
+## Sample from each MAF and ES quantile
+ddb.s <- subset(ddb,!is.na(MAF_DGRP_incl_mono) & !is.na(MAF.resid))
 set.seed(123)
 tmp <- matrix(data=NA,nrow=1,ncol=4)
 tmp1 <- matrix(data=NA,nrow=20,ncol=100)
@@ -675,29 +1008,30 @@ tmp3 <- matrix(data=NA,nrow=20,ncol=100)
 tmp4 <- matrix(data=NA,nrow=20,ncol=100)
 for (i in 1:20){ 
   for (j in 1:100){
-    tmp <- subset(dd2b.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Wald_P>=Pval_quantiles[j] & Wald_P<=Pval_quantiles[j+1])[sample(1:nrow(subset(dd2b.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Wald_P>=Pval_quantiles[j] & Wald_P<=Pval_quantiles[j+1])),size=1),c("MAF_DPGP3_incl_mono","MAF.resid","Wald_P","fdr")]
-    #tmp1 = MAF in the DPGP3
+    tmp <- subset(ddb.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Abs_Effect>=ES_quantiles[j] & Abs_Effect<=ES_quantiles[j+1])[sample(1:nrow(subset(ddb.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Abs_Effect>=ES_quantiles[j] & Abs_Effect<=ES_quantiles[j+1])),size=1),c("MAF_DGRP_incl_mono","MAF.resid","Abs_Effect","Wald_P")]
     tmp1[i,j] <- ifelse(length(tmp[1])>0,as.numeric(tmp[1]),NA)
-    #tmp2 = MAF in LHm
     tmp2[i,j] <- ifelse(length(tmp[2])>0,as.numeric(tmp[2]),NA)
-    #tmp3 = Wald P-value
-    tmp3[i,j] <-ifelse(length(tmp[3])>0,as.numeric(tmp[3]),NA)
-    #tmp4 = FDR value
+    tmp3[i,j] <- ifelse(length(tmp[3])>0,as.numeric(tmp[3]),NA)
     tmp4[i,j] <- ifelse(length(tmp[4])>0,as.numeric(tmp[4]),NA)
   }
   print(i)
 }
-maf.dpgp3 <- data.frame(tmp1)
-init.dpgp3 <- data.frame(tmp2)
-pvals.dpgp3 <- data.frame(tmp3)
-fdr.dpgp3 <- data.frame(tmp4)
+## Output 
+## MAF DGRP
+maf.dgrp <- data.frame(tmp1)
+## Resid MAF LHm
+init.dgrp <- data.frame(tmp2)
+## Effect size LHm
+es.dgrp <- data.frame(tmp3)
+## P-values LHm
+pvals.dgrp <- data.frame(tmp4)
 
-#Aggregate MAF_DGRP by P-value quantile (column-wise)
-indep_sum <- data.frame(apply(maf.dpgp3,2,"mean",na.rm=T),apply(init.dpgp3,2,"mean",na.rm=T),apply(pvals.dpgp3,2,"mean",na.rm=T),apply(fdr.dpgp3,2,"mean",na.rm=T))
-names(indep_sum) <- c("MAF_DPGP3_incl_mono","MAF.resid","Wald_P","fdr")
+## Aggregate MAF_DGRP by Absolute effect Size quantile
+indep_sum.dgrp <- data.frame(apply(maf.dgrp,2,"mean",na.rm=T),apply(init.dgrp,2,"mean",na.rm=T),apply(es.dgrp,2,"mean",na.rm=T),apply(pvals.dgrp,2,"mean",na.rm=T))
+names(indep_sum.dgrp) <- c("MAF_DGRP_incl_mono","MAF.resid","Abs_Effect","Wald_P")
 
-#Plot
-fig3f <- ggplot(indep_sum,aes(y=MAF_DPGP3_incl_mono,x=1:100*20))+
+## Plot MAF DGRP as a function of quantile (100 quantiles)
+fig4d <- ggplot(indep_sum.dgrp,aes(y=MAF_DGRP_incl_mono,x=c(1:100)*20))+
   theme_bw()+
   geom_point(size=3)+
   geom_smooth(method="lm",col="black",fill="gray75")+
@@ -705,19 +1039,129 @@ fig3f <- ggplot(indep_sum,aes(y=MAF_DPGP3_incl_mono,x=1:100*20))+
   xlab("")+
   ylab("")+
   scale_x_continuous(breaks=c(1,1000,2000))
-fig3f
+fig4d
 
-#Statistical test: is there negative correlation between MAF-DPGP3 and Pval?
+## Statistical test: is there positive correlation between MAF-DGRP and absolute effect size?
+maf2 <- unlist(maf.dgrp)
+init2 <- unlist(init.dgrp)
+es2 <- unlist(es.dgrp)
+pvals2 <- unlist(pvals.dgrp)
+df <- data.frame(cbind(maf2,init2,es2,pvals2))
+cor.test(df$maf2,df$es2,method="spearman")
+#Positive (non-sig) correlation, rho=0.009866306, P=0.660
+
+
+## DPGP3 ####
+
+## Sample from each MAF and ES quantile
+ddb.s <- subset(ddb,!is.na(MAF_DPGP3_incl_mono) & !is.na(MAF.resid))
+set.seed(123)
+tmp <- matrix(data=NA,nrow=1,ncol=4)
+tmp1 <- matrix(data=NA,nrow=20,ncol=100)
+tmp2 <- matrix(data=NA,nrow=20,ncol=100)
+tmp3 <- matrix(data=NA,nrow=20,ncol=100)
+tmp4 <- matrix(data=NA,nrow=20,ncol=100)
+for (i in 1:20){ 
+  for (j in 1:100){
+    tmp <- subset(ddb.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Abs_Effect>=ES_quantiles[j] & Abs_Effect<=ES_quantiles[j+1])[sample(1:nrow(subset(ddb.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Abs_Effect>=ES_quantiles[j] & Abs_Effect<=ES_quantiles[j+1])),size=1),c("MAF_DPGP3_incl_mono","MAF.resid","Abs_Effect","Wald_P")]
+    tmp1[i,j] <- ifelse(length(tmp[1])>0,as.numeric(tmp[1]),NA)
+    tmp2[i,j] <- ifelse(length(tmp[2])>0,as.numeric(tmp[2]),NA)
+    tmp3[i,j] <- ifelse(length(tmp[3])>0,as.numeric(tmp[3]),NA)
+    tmp4[i,j] <- ifelse(length(tmp[4])>0,as.numeric(tmp[4]),NA)
+  }
+  print(i)
+}
+## Output 
+## MAF DPGP3
+maf.dpgp3 <- data.frame(tmp1)
+## Resid MAF LHm
+init.dpgp3 <- data.frame(tmp2)
+## Effect size LHm
+es.dpgp3 <- data.frame(tmp3)
+## P-values LHm
+pvals.dpgp3 <- data.frame(tmp4)
+
+#Aggregate MAF_DPGP3 by Absolute Effect Size quantile
+indep_sum.dpgp3 <- data.frame(apply(maf.dpgp3,2,"mean",na.rm=T),apply(init.dpgp3,2,"mean",na.rm=T),apply(es.dpgp3,2,"mean",na.rm=T),apply(pvals.dpgp3,2,"mean",na.rm=T))
+names(indep_sum.dpgp3) <- c("MAF_DPGP3_incl_mono","MAF.resid","Abs_Effect","Wald_P")
+
+## Plot MAF_DPGP3 as a function of quantile (100 quantiles)
+fig4h <- ggplot(indep_sum.dpgp3,aes(y=MAF_DPGP3_incl_mono,x=c(1:100)*20))+
+  theme_bw()+
+  geom_point(size=3)+
+  geom_smooth(method="lm",col="black",fill="gray75")+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("")+
+  scale_x_continuous(breaks=c(1,1000,2000))
+fig4h
+
+## Statistical test: is there positive correlation between MAF-DPGP3 and absolute effect size?
 maf2 <- unlist(maf.dpgp3)
 init2 <- unlist(init.dpgp3)
+es2 <- unlist(es.dpgp3)
 pvals2 <- unlist(pvals.dpgp3)
-fdr2 <- unlist(fdr.dpgp3)
-df <- data.frame(cbind(maf2,init2,pvals2,fdr2))
-cor.test(df$maf2,df$pvals2,method="spearman")
-#Negative correlation, rho=-0.07003042, P=0.001726
------ R code -----
+df <- data.frame(cbind(maf2,init2,es2,pvals2))
+cor.test(df$maf2,df$es2,method="spearman")
+#Positive correlation, rho=0.04685988, P=0.037
 
+## SA ####
 
-#########################
-## LD-based analyses
-#########################
+## Sample from each MAF and ES quantile
+ddb.s <- subset(ddb,!is.na(MAF_SA_incl_mono) & !is.na(MAF.resid))
+set.seed(123)
+tmp <- matrix(data=NA,nrow=1,ncol=4)
+tmp1 <- matrix(data=NA,nrow=20,ncol=100)
+tmp2 <- matrix(data=NA,nrow=20,ncol=100)
+tmp3 <- matrix(data=NA,nrow=20,ncol=100)
+tmp4 <- matrix(data=NA,nrow=20,ncol=100)
+for (i in 1:20){ 
+  for (j in 1:100){
+    tmp <- subset(ddb.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Abs_Effect>=ES_quantiles[j] & Abs_Effect<=ES_quantiles[j+1])[sample(1:nrow(subset(ddb.s,MAF.resid>=MAF_quantiles[i] & MAF.resid<=(MAF_quantiles[i+1]) & Abs_Effect>=ES_quantiles[j] & Abs_Effect<=ES_quantiles[j+1])),size=1),c("MAF_SA_incl_mono","MAF.resid","Abs_Effect","Wald_P")]
+    tmp1[i,j] <- ifelse(length(tmp[1])>0,as.numeric(tmp[1]),NA)
+    tmp2[i,j] <- ifelse(length(tmp[2])>0,as.numeric(tmp[2]),NA)
+    tmp3[i,j] <- ifelse(length(tmp[3])>0,as.numeric(tmp[3]),NA)
+    tmp4[i,j] <- ifelse(length(tmp[4])>0,as.numeric(tmp[4]),NA)
+  }
+  print(i)
+}
+## Output 
+## MAF SA
+maf.sa <- data.frame(tmp1)
+## Resid MAF LHm
+init.sa <- data.frame(tmp2)
+## Effect size LHm
+es.sa <- data.frame(tmp3)
+## P-values LHm
+pvals.sa <- data.frame(tmp4)
+
+#Aggregate MAF_SA by Absolute Effect Size quantile
+indep_sum.sa <- data.frame(apply(maf.sa,2,"mean",na.rm=T),apply(init.sa,2,"mean",na.rm=T),apply(es.sa,2,"mean",na.rm=T),apply(pvals.sa,2,"mean",na.rm=T))
+names(indep_sum.sa) <- c("MAF_SA_incl_mono","MAF.resid","Abs_Effect","Wald_P")
+
+## Plot MAF SA as a function of quantile (100 quantiles)
+fig4l <- ggplot(indep_sum.sa,aes(y=MAF_SA_incl_mono,x=c(1:100)*20))+
+  theme_bw()+
+  geom_point(size=3)+
+  geom_smooth(method="lm",col="black",fill="gray75")+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  xlab("")+
+  ylab("")+
+  scale_x_continuous(breaks=c(1,1000,2000))
+fig4l
+
+## Statistical test: is there positive correlation between MAF-SA and absolute effect size?
+maf2 <- unlist(maf.sa)
+init2 <- unlist(init.sa)
+es2 <- unlist(es.sa)
+pvals2 <- unlist(pvals.sa)
+df <- data.frame(cbind(maf2,init2,es2,pvals2))
+cor.test(df$maf2,df$es2,method="spearman")
+#Positive correlation, rho=0.05498206, P=0.01417
+
+####################
+## All Plots together
+####################
+
+plot_grid(fig4a,fig4b,fig4c,fig4d,fig4e,fig4f,fig4g,fig4h,fig4i,fig4j,fig4k,fig4l,ncol=4,rel_widths = c(2,2,1,2),align='v',axis='l',labels = "AUTO",label_size=20,scale=0.95)
+
