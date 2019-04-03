@@ -347,12 +347,13 @@ unmatched_mean.Dsim_Signor <- mean(subset(ddc,fdr>=0.3 & !is.na(is.transspecific
 ggplot(match_sum.Dsim_Signor,aes(is.transspecific_Dsim_Signor))+
   geom_histogram(fill="grey75",col="white",bins=12)+
   theme_bw()+
-  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  theme(plot.title=element_text(size=20),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank(),plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"))+
   xlab("")+
   ylab("Count")+
   geom_segment(x=obs_mean.Dsim_Signor,xend=obs_mean.Dsim_Signor,y=0,yend=300,col="dodgerblue4",size=1.5)+
   geom_segment(x=unmatched_mean.Dsim_Signor,xend=unmatched_mean.Dsim_Signor,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
-  scale_x_continuous(breaks=seq(0.01,0.04,0.01))
+  scale_x_continuous(breaks=seq(0.01,0.04,0.01))+
+  ggtitle(expression(paste(italic("D. simulans")," (North American, N=170)")))
 
 ## Empirical P value
 sum(match_sum.Dsim_Signor$is.transspecific_Dsim_Signor>obs_mean.Dsim_Signor)/1000
@@ -414,12 +415,13 @@ unmatched_mean.Dsim_Rogers <- mean(subset(ddc,fdr>=0.3 & !is.na(is.transspecific
 ggplot(match_sum.Dsim_Rogers,aes(is.transspecific_Dsim_Rogers))+
   geom_histogram(fill="grey75",col="white",bins=12)+
   theme_bw()+
-  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank())+
+  theme(plot.title=element_text(size=20),axis.text = element_text(size=25),axis.title = element_text(size=30),legend.text = element_text(size=30),legend.key.height=unit(3,"line"),legend.key.width=unit(3,"line"),legend.position="none",legend.background =element_blank(),plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"))+
   xlab("")+
   ylab("Count")+
   geom_segment(x=obs_mean.Dsim_Rogers,xend=obs_mean.Dsim_Rogers,y=0,yend=300,col="dodgerblue4",size=1.5)+
   geom_segment(x=unmatched_mean.Dsim_Rogers,xend=unmatched_mean.Dsim_Rogers,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
-  scale_x_continuous(breaks=seq(0.01,0.04,0.01))
+  scale_x_continuous(breaks=seq(0.02,0.08,0.02))+
+  ggtitle(expression(paste(italic("D. simulans")," (African, N=20)")))
 
 ## Empirical P value
 sum(match_sum.Dsim_Rogers$is.transspecific_Dsim_Rogers>obs_mean.Dsim_Rogers)/1000
@@ -485,7 +487,9 @@ ggplot(match_sum.Dyak_Rogers,aes(is.transspecific_Dyak_Rogers))+
   ylab("Count")+
   geom_segment(x=obs_mean.Dyak_Rogers,xend=obs_mean.Dyak_Rogers,y=0,yend=300,col="dodgerblue4",size=1.5)+
   geom_segment(x=unmatched_mean.Dyak_Rogers,xend=unmatched_mean.Dyak_Rogers,y=0,yend=300,col="black",size=1.5,linetype="dashed")+
-  scale_x_continuous(breaks=seq(0.01,0.04,0.01))
+  scale_x_continuous(breaks=seq(0.01,0.05,0.01))+
+  ggtitle(expression(paste(italic("D. yakuba")," (African, N=20)")))
+
 
 ## Empirical P value
 sum(match_sum.Dyak_Rogers$is.transspecific_Dyak_Rogers>obs_mean.Dyak_Rogers)/1000
