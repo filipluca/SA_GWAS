@@ -1,9 +1,798 @@
+dir <- "~/Desktop/PloS_Biol_revision/"
+
+
+se <- function(x) sqrt(var(x,na.rm=TRUE)/length(na.omit(x)))
+asNumeric <- function(x) as.numeric(as.character(x))
+factorsNumeric <- function(x) modifyList(x, lapply(x[, sapply(x, is.factor)], asNumeric))
+library(PopGenome)
+
+
 ####################################################
 ## WINDOW-BASED ASSOCIATION
 ####################################################
+
+----- R code -----
+#Chunks####
+chunks <- read.table("~/Documents/data/pop_gen/coord_conversion/window_start_end_r5_r6.txt")
+chunks$Predictor <- paste(chunks$V4,chunks$V5,sep = "_")
+names(chunks) <- c("Chrom.r5","BIN_START.r5","BIN_END.r5","Chrom.r6","BIN_START.r6","BIN_END.r6","Predictor")
+
+#Make chunk file that is suitable for LDAK's gene-based test
+chunks_r5 <- chunks[4:7]
+levels(chunks_r5$Chrom.r6) <- 1:5
+chunks_r5 <- chunks_r5[order(chunks_r5$Chrom.r6,chunks_r5$BIN_START.r6),]
+#write.table(chunks_r5[c(4,1,2,3)],"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/chunks_r5_v2.txt",quote=F,row.names=F,col.names=F)
+----- /R code -----
 
 ## Chunk-based association testing, but using reference genome 5 chunks
 ## See R code for details on how to make cbat_r5_v2.txt
 ../ldak5.mac --cut-genes cbat_r5_no_covar --bfile f3c.lhm.snp --genefile chunks_r5_v2.txt --ignore-weights YES --pvalues assoc_mixed_model/mm.pvalues;
 ../ldak5.mac --calc-genes-reml cbat_r5_no_covar --bfile f3c.lhm.snp --ignore-weights YES --power -.25 --pheno pheno.txt --mpheno 6;
 ../ldak5.mac --join-genes-reml cbat_r5_no_covar
+
+##############################################
+## Tajima's D (and other statistics)
+##############################################
+----- R code -----
+
+## Modify VCF for Tajima's D (remove positions where depth<20)
+## Same procedure is applied for each chromosome arm in each population
+
+
+#Import vcf file of interest
+#Do for each chromosome arm
+vcf <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr2L/vcf/vcf_without_reference/r5/original/r5.vcf")
+
+#Sanity check
+#plot(rownames(vcf),vcf$V2)
+
+#Three possible types of acceptable allele
+
+#No missing values
+type1 <- c("A","T","G","C")
+part1 <- subset(vcf,V5 %in% type1)
+part1[part1==1] <- "1/1"
+part1[part1==0] <- "0/0"
+
+#Missing value = 2
+type2 <- c("A,*","T,*","G,*","C,*")
+part2 <- subset(vcf,V5 %in% type2)
+part2[part2==2] <- "./."
+part2[part2==1] <- "1/1"
+part2[part2==0] <- "0/0"
+part2$V5 <- ifelse(part2$V5=="A,*","A",ifelse(part2$V5=="T,*","T",ifelse(part2$V5=="C,*","C",ifelse(part2$V5=="G,*","G",NA))))
+
+#Missing value = 1
+type3 <- c("*,A","*,T","*,G","*,C")
+part3 <- subset(vcf,V5 %in% type3)
+part3[part3==2] <- "1/1"
+part3[part3==1] <- "./."
+part3[part3==0] <- "0/0"
+part3$V5 <- ifelse(part3$V5=="*,A","A",ifelse(part3$V5=="*,T","T",ifelse(part3$V5=="*,C","C",ifelse(part3$V5=="*,G","G",NA))))
+
+#Rbind parts 1,2,3
+vcf <- rbind(part1,part2,part3)
+#Transform position column to numeric
+vcf$V2 <- as.numeric(vcf$V2)
+#Order by position column
+vcf <- vcf[order(vcf$V2),]
+#Replace chromosome column with 1
+vcf$V1 <- 1
+#Filter for depth (DP>19)
+vcf <- subset(vcf,rowCounts(vcf[,10:ncol(vcf)]!="./.")>19)
+vcf$V2 <- format(vcf$V2,scientific=F)
+
+write.table(vcf,"/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr2L/vcf/vcf_without_reference/r5/modified/body.vcf",sep="\t",row.names = F,quote=F,col.names=F)
+
+rm(vcf)
+rm(part1)
+rm(part2)
+rm(part3)
+ ----- /R code -----
+ 
+## INSERT MISSING UNIX CODE where header.vcf is concatenated with body.vcf
+
+----- R code -----
+
+#2L
+#Import vcf, where coordinates have been converted to reference # 5
+vcf.2L.DGRP <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr2L/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.2L.DGRP <- sliding.window.transform(vcf.2L.DGRP,1000,500,type=2)
+sliding.2L.DGRP <- neutrality.stats(sliding.2L.DGRP)
+neutrality.2L.DGRP <- get.neutrality(sliding.2L.DGRP)[[1]]
+sliding.2L.DGRP <- linkage.stats(sliding.2L.DGRP,do.ZnS = T)
+linkage.2L.DGRP <- get.linkage(sliding.2L.DGRP)[[1]]
+sliding.2L.DGRP <- diversity.stats(sliding.2L.DGRP)
+diversity.2L.DGRP <- get.diversity(sliding.2L.DGRP)[[1]]
+stats.2L.DGRP <- cbind(neutrality.2L.DGRP,linkage.2L.DGRP,diversity.2L.DGRP)
+#clean up stats dataframe
+stats.2L.DGRP <- cbind(Row.names=rownames(stats.2L.DGRP),stats.2L.DGRP)
+rownames(stats.2L.DGRP) <- NULL
+stats.2L.DGRP <- as.data.frame(stats.2L.DGRP)
+stats.2L.DGRP$Start_End <- do.call(rbind,strsplit(as.character(stats.2L.DGRP$Row.names),"-"))
+stats.2L.DGRP$Start <- as.numeric(as.character(stats.2L.DGRP$Start_End[,1]))
+stats.2L.DGRP$End <- stats.2L.DGRP$Start+999
+stats.2L.DGRP <- factorsNumeric(stats.2L.DGRP)
+stats.2L.DGRP <- stats.2L.DGRP[,c(22:23,2:3,5:6,11:17)]
+stats.2L.DGRP$Chrom <- "2L"
+write.table(stats.2L.DGRP,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2L.DGRP_dp20.txt",quote=F,row.names=F)
+
+#2R
+vcf.2R.DGRP <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr2R/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.2R.DGRP <- sliding.window.transform(vcf.2R.DGRP,1000,500,type=2)
+sliding.2R.DGRP <- neutrality.stats(sliding.2R.DGRP)
+neutrality.2R.DGRP <- get.neutrality(sliding.2R.DGRP)[[1]]
+sliding.2R.DGRP <- linkage.stats(sliding.2R.DGRP,do.ZnS = T)
+linkage.2R.DGRP <- get.linkage(sliding.2R.DGRP)[[1]]
+sliding.2R.DGRP <- diversity.stats(sliding.2R.DGRP)
+diversity.2R.DGRP <- get.diversity(sliding.2R.DGRP)[[1]]
+stats.2R.DGRP <- cbind(neutrality.2R.DGRP,linkage.2R.DGRP,diversity.2R.DGRP)
+#clean up stats dataframe
+stats.2R.DGRP <- cbind(Row.names=rownames(stats.2R.DGRP),stats.2R.DGRP)
+rownames(stats.2R.DGRP) <- NULL
+stats.2R.DGRP <- as.data.frame(stats.2R.DGRP)
+stats.2R.DGRP$Start_End <- do.call(rbind,strsplit(as.character(stats.2R.DGRP$Row.names),"-"))
+stats.2R.DGRP$Start <- as.numeric(as.character(stats.2R.DGRP$Start_End[,1]))
+stats.2R.DGRP$End <- stats.2R.DGRP$Start+999
+stats.2R.DGRP <- factorsNumeric(stats.2R.DGRP)
+stats.2R.DGRP <- stats.2R.DGRP[,c(22:23,2:3,5:6,11:17)]
+stats.2R.DGRP$Chrom <- "2R"
+write.table(stats.2R.DGRP,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2R.DGRP_dp20.txt",quote=F,row.names=F)
+
+#3L
+vcf.3L.DGRP <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr3L/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.3L.DGRP <- sliding.window.transform(vcf.3L.DGRP,1000,500,type=2)
+sliding.3L.DGRP <- neutrality.stats(sliding.3L.DGRP)
+neutrality.3L.DGRP <- get.neutrality(sliding.3L.DGRP)[[1]]
+sliding.3L.DGRP <- linkage.stats(sliding.3L.DGRP,do.ZnS = T)
+linkage.3L.DGRP <- get.linkage(sliding.3L.DGRP)[[1]]
+sliding.3L.DGRP <- diversity.stats(sliding.3L.DGRP)
+diversity.3L.DGRP <- get.diversity(sliding.3L.DGRP)[[1]]
+stats.3L.DGRP <- cbind(neutrality.3L.DGRP,linkage.3L.DGRP,diversity.3L.DGRP)
+#clean up stats dataframe
+stats.3L.DGRP <- cbind(Row.names=rownames(stats.3L.DGRP),stats.3L.DGRP)
+rownames(stats.3L.DGRP) <- NULL
+stats.3L.DGRP <- as.data.frame(stats.3L.DGRP)
+stats.3L.DGRP$Start_End <- do.call(rbind,strsplit(as.character(stats.3L.DGRP$Row.names),"-"))
+stats.3L.DGRP$Start <- as.numeric(as.character(stats.3L.DGRP$Start_End[,1]))
+stats.3L.DGRP$End <- stats.3L.DGRP$Start+999
+stats.3L.DGRP <- factorsNumeric(stats.3L.DGRP)
+stats.3L.DGRP <- stats.3L.DGRP[,c(22:23,2:3,5:6,11:17)]
+stats.3L.DGRP$Chrom <- "3L"
+write.table(stats.3L.DGRP,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3L.DGRP_dp20.txt",quote=F,row.names=F)
+
+#3R
+vcf.3R.DGRP <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr3R/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.3R.DGRP <- sliding.window.transform(vcf.3R.DGRP,1000,500,type=2)
+sliding.3R.DGRP <- neutrality.stats(sliding.3R.DGRP)
+neutrality.3R.DGRP <- get.neutrality(sliding.3R.DGRP)[[1]]
+sliding.3R.DGRP <- linkage.stats(sliding.3R.DGRP)
+linkage.3R.DGRP <- get.linkage(sliding.3R.DGRP)[[1]]
+sliding.3R.DGRP <- diversity.stats(sliding.3R.DGRP)
+diversity.3R.DGRP <- get.diversity(sliding.3R.DGRP)[[1]]
+stats.3R.DGRP <- cbind(neutrality.3R.DGRP,linkage.3R.DGRP,diversity.3R.DGRP)
+#clean up stats dataframe
+stats.3R.DGRP <- cbind(Row.names=rownames(stats.3R.DGRP),stats.3R.DGRP)
+rownames(stats.3R.DGRP) <- NULL
+stats.3R.DGRP <- as.data.frame(stats.3R.DGRP)
+stats.3R.DGRP$Start_End <- do.call(rbind,strsplit(as.character(stats.3R.DGRP$Row.names),"-"))
+stats.3R.DGRP$Start <- as.numeric(as.character(stats.3R.DGRP$Start_End[,1]))
+stats.3R.DGRP$End <- stats.3R.DGRP$Start+999
+stats.3R.DGRP <- factorsNumeric(stats.3R.DGRP)
+stats.3R.DGRP <- stats.3R.DGRP[,c(22:23,2:3,5:6,11:17)]
+stats.3R.DGRP$Chrom <- "3R"
+write.table(stats.3R.DGRP,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3R.DGRP_dp20.txt",quote=F,row.names=F)
+
+#X
+vcf.X.DGRP <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_ChrX/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.X.DGRP <- sliding.window.transform(vcf.X.DGRP,1000,500,type=2)
+sliding.X.DGRP <- neutrality.stats(sliding.X.DGRP)
+neutrality.X.DGRP <- get.neutrality(sliding.X.DGRP)[[1]]
+sliding.X.DGRP <- linkage.stats(sliding.X.DGRP,do.ZnS = T)
+linkage.X.DGRP <- get.linkage(sliding.X.DGRP)[[1]]
+sliding.X.DGRP <- diversity.stats(sliding.X.DGRP)
+diversity.X.DGRP <- get.diversity(sliding.X.DGRP)[[1]]
+stats.X.DGRP <- cbind(neutrality.X.DGRP,linkage.X.DGRP,diversity.X.DGRP)
+#clean up stats dataframe
+stats.X.DGRP <- cbind(Row.names=rownames(stats.X.DGRP),stats.X.DGRP)
+rownames(stats.X.DGRP) <- NULL
+stats.X.DGRP <- as.data.frame(stats.X.DGRP)
+stats.X.DGRP$Start_End <- do.call(rbind,strsplit(as.character(stats.X.DGRP$Row.names),"-"))
+stats.X.DGRP$Start <- as.numeric(as.character(stats.X.DGRP$Start_End[,1]))
+stats.X.DGRP$End <- stats.X.DGRP$Start+999
+stats.X.DGRP <- factorsNumeric(stats.X.DGRP)
+stats.X.DGRP <- stats.X.DGRP[,c(22:23,2:3,5:6,11:17)]
+stats.X.DGRP$Chrom <- "X"
+write.table(stats.X.DGRP,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.X.DGRP_dp20.txt",quote=F,row.names=F)
+
+
+stats.2L.DGRP <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2L.DGRP_dp20.txt",head=T)
+stats.2R.DGRP <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2R.DGRP_dp20.txt",head=T)
+stats.3L.DGRP <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3L.DGRP_dp20.txt",head=T)
+stats.3R.DGRP <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3R.DGRP_dp20.txt",head=T)
+stats.X.DGRP <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.X.DGRP_dp20.txt",head=T)
+stats.all.DGRP <- rbind(stats.2L.DGRP,stats.2R.DGRP,stats.3L.DGRP,stats.3R.DGRP,stats.X.DGRP)
+
+#Merge window-based statistics (in r5 coordinates) to r6 coordinates  
+stats.all.DGRP <- merge(chunks[c("Chrom.r5","BIN_START.r5","Chrom.r6","BIN_START.r6")],stats.all.DGRP,by.x=c("Chrom.r5","BIN_START.r5"),by.y=c("Chrom","Start"),all.x=T)
+write.table(stats.all.DGRP,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.DGRP_dp20_r5_and_r6.txt",quote=F,row.names=F)
+stats.all.DGRP <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.DGRP_dp20_r5_and_r6.txt",head=T)
+
+#Taj.D DPGP3####
+
+#2L
+#Import vcf, where coordinates have been converted to reference # 5
+vcf.2L.DPGP3 <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2L/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.2L.DPGP3 <- sliding.window.transform(vcf.2L.DPGP3,1000,500,type=2)
+sliding.2L.DPGP3 <- neutrality.stats(sliding.2L.DPGP3)
+neutrality.2L.DPGP3 <- get.neutrality(sliding.2L.DPGP3)[[1]]
+sliding.2L.DPGP3 <- linkage.stats(sliding.2L.DPGP3,do.ZnS = T)
+linkage.2L.DPGP3 <- get.linkage(sliding.2L.DPGP3)[[1]]
+sliding.2L.DPGP3 <- diversity.stats(sliding.2L.DPGP3)
+diversity.2L.DPGP3 <- get.diversity(sliding.2L.DPGP3)[[1]]
+stats.2L.DPGP3 <- cbind(neutrality.2L.DPGP3,linkage.2L.DPGP3,diversity.2L.DPGP3)
+#clean up stats dataframe
+stats.2L.DPGP3 <- cbind(Row.names=rownames(stats.2L.DPGP3),stats.2L.DPGP3)
+rownames(stats.2L.DPGP3) <- NULL
+stats.2L.DPGP3 <- as.data.frame(stats.2L.DPGP3)
+stats.2L.DPGP3$Start_End <- do.call(rbind,strsplit(as.character(stats.2L.DPGP3$Row.names),"-"))
+stats.2L.DPGP3$Start <- as.numeric(as.character(stats.2L.DPGP3$Start_End[,1]))
+stats.2L.DPGP3$End <- stats.2L.DPGP3$Start+999
+stats.2L.DPGP3 <- factorsNumeric(stats.2L.DPGP3)
+stats.2L.DPGP3 <- stats.2L.DPGP3[,c(22:23,2:3,5:6,11:17)]
+stats.2L.DPGP3$Chrom <- "2L"
+write.table(stats.2L.DPGP3,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2L.DPGP3_dp20.txt",quote=F,row.names=F)
+
+#2R
+vcf.2R.DPGP3 <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2R/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.2R.DPGP3 <- sliding.window.transform(vcf.2R.DPGP3,1000,500,type=2)
+sliding.2R.DPGP3 <- neutrality.stats(sliding.2R.DPGP3)
+neutrality.2R.DPGP3 <- get.neutrality(sliding.2R.DPGP3)[[1]]
+sliding.2R.DPGP3 <- linkage.stats(sliding.2R.DPGP3,do.ZnS = T)
+linkage.2R.DPGP3 <- get.linkage(sliding.2R.DPGP3)[[1]]
+sliding.2R.DPGP3 <- diversity.stats(sliding.2R.DPGP3)
+diversity.2R.DPGP3 <- get.diversity(sliding.2R.DPGP3)[[1]]
+stats.2R.DPGP3 <- cbind(neutrality.2R.DPGP3,linkage.2R.DPGP3,diversity.2R.DPGP3)
+#clean up stats dataframe
+stats.2R.DPGP3 <- cbind(Row.names=rownames(stats.2R.DPGP3),stats.2R.DPGP3)
+rownames(stats.2R.DPGP3) <- NULL
+stats.2R.DPGP3 <- as.data.frame(stats.2R.DPGP3)
+stats.2R.DPGP3$Start_End <- do.call(rbind,strsplit(as.character(stats.2R.DPGP3$Row.names),"-"))
+stats.2R.DPGP3$Start <- as.numeric(as.character(stats.2R.DPGP3$Start_End[,1]))
+stats.2R.DPGP3$End <- stats.2R.DPGP3$Start+999
+stats.2R.DPGP3 <- factorsNumeric(stats.2R.DPGP3)
+stats.2R.DPGP3 <- stats.2R.DPGP3[,c(22:23,2:3,5:6,11:17)]
+stats.2R.DPGP3$Chrom <- "2R"
+write.table(stats.2R.DPGP3,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2R.DPGP3_dp20.txt",quote=F,row.names=F)
+
+#3L
+vcf.3L.DPGP3 <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr3L/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.3L.DPGP3 <- sliding.window.transform(vcf.3L.DPGP3,1000,500,type=2)
+sliding.3L.DPGP3 <- neutrality.stats(sliding.3L.DPGP3)
+neutrality.3L.DPGP3 <- get.neutrality(sliding.3L.DPGP3)[[1]]
+sliding.3L.DPGP3 <- linkage.stats(sliding.3L.DPGP3,do.ZnS = T)
+linkage.3L.DPGP3 <- get.linkage(sliding.3L.DPGP3)[[1]]
+sliding.3L.DPGP3 <- diversity.stats(sliding.3L.DPGP3)
+diversity.3L.DPGP3 <- get.diversity(sliding.3L.DPGP3)[[1]]
+stats.3L.DPGP3 <- cbind(neutrality.3L.DPGP3,linkage.3L.DPGP3,diversity.3L.DPGP3)
+#clean up stats dataframe
+stats.3L.DPGP3 <- cbind(Row.names=rownames(stats.3L.DPGP3),stats.3L.DPGP3)
+rownames(stats.3L.DPGP3) <- NULL
+stats.3L.DPGP3 <- as.data.frame(stats.3L.DPGP3)
+stats.3L.DPGP3$Start_End <- do.call(rbind,strsplit(as.character(stats.3L.DPGP3$Row.names),"-"))
+stats.3L.DPGP3$Start <- as.numeric(as.character(stats.3L.DPGP3$Start_End[,1]))
+stats.3L.DPGP3$End <- stats.3L.DPGP3$Start+999
+stats.3L.DPGP3 <- factorsNumeric(stats.3L.DPGP3)
+stats.3L.DPGP3 <- stats.3L.DPGP3[,c(22:23,2:3,5:6,11:17)]
+stats.3L.DPGP3$Chrom <- "3L"
+write.table(stats.3L.DPGP3,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3L.DPGP3_dp20.txt",quote=F,row.names=F)
+
+#3R
+vcf.3R.DPGP3 <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr3R/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.3R.DPGP3 <- sliding.window.transform(vcf.3R.DPGP3,1000,500,type=2)
+sliding.3R.DPGP3 <- neutrality.stats(sliding.3R.DPGP3)
+neutrality.3R.DPGP3 <- get.neutrality(sliding.3R.DPGP3)[[1]]
+sliding.3R.DPGP3 <- linkage.stats(sliding.3R.DPGP3)
+linkage.3R.DPGP3 <- get.linkage(sliding.3R.DPGP3)[[1]]
+sliding.3R.DPGP3 <- diversity.stats(sliding.3R.DPGP3)
+diversity.3R.DPGP3 <- get.diversity(sliding.3R.DPGP3)[[1]]
+stats.3R.DPGP3 <- cbind(neutrality.3R.DPGP3,linkage.3R.DPGP3,diversity.3R.DPGP3)
+#clean up stats dataframe
+stats.3R.DPGP3 <- cbind(Row.names=rownames(stats.3R.DPGP3),stats.3R.DPGP3)
+rownames(stats.3R.DPGP3) <- NULL
+stats.3R.DPGP3 <- as.data.frame(stats.3R.DPGP3)
+stats.3R.DPGP3$Start_End <- do.call(rbind,strsplit(as.character(stats.3R.DPGP3$Row.names),"-"))
+stats.3R.DPGP3$Start <- as.numeric(as.character(stats.3R.DPGP3$Start_End[,1]))
+stats.3R.DPGP3$End <- stats.3R.DPGP3$Start+999
+stats.3R.DPGP3 <- factorsNumeric(stats.3R.DPGP3)
+stats.3R.DPGP3 <- stats.3R.DPGP3[,c(22:23,2:3,5:6,11:17)]
+stats.3R.DPGP3$Chrom <- "3R"
+write.table(stats.3R.DPGP3,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3R.DPGP3_dp20.txt",quote=F,row.names=F)
+
+#X
+vcf.X.DPGP3 <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_ChrX/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.X.DPGP3 <- sliding.window.transform(vcf.X.DPGP3,1000,500,type=2)
+sliding.X.DPGP3 <- neutrality.stats(sliding.X.DPGP3)
+neutrality.X.DPGP3 <- get.neutrality(sliding.X.DPGP3)[[1]]
+sliding.X.DPGP3 <- linkage.stats(sliding.X.DPGP3,do.ZnS = T)
+linkage.X.DPGP3 <- get.linkage(sliding.X.DPGP3)[[1]]
+sliding.X.DPGP3 <- diversity.stats(sliding.X.DPGP3)
+diversity.X.DPGP3 <- get.diversity(sliding.X.DPGP3)[[1]]
+stats.X.DPGP3 <- cbind(neutrality.X.DPGP3,linkage.X.DPGP3,diversity.X.DPGP3)
+#clean up stats dataframe
+stats.X.DPGP3 <- cbind(Row.names=rownames(stats.X.DPGP3),stats.X.DPGP3)
+rownames(stats.X.DPGP3) <- NULL
+stats.X.DPGP3 <- as.data.frame(stats.X.DPGP3)
+stats.X.DPGP3$Start_End <- do.call(rbind,strsplit(as.character(stats.X.DPGP3$Row.names),"-"))
+stats.X.DPGP3$Start <- as.numeric(as.character(stats.X.DPGP3$Start_End[,1]))
+stats.X.DPGP3$End <- stats.X.DPGP3$Start+999
+stats.X.DPGP3 <- factorsNumeric(stats.X.DPGP3)
+stats.X.DPGP3 <- stats.X.DPGP3[,c(22:23,2:3,5:6,11:17)]
+stats.X.DPGP3$Chrom <- "X"
+write.table(stats.X.DPGP3,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.X.DPGP3_dp20.txt",quote=F,row.names=F)
+
+stats.2L.DPGP3<- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2L.DPGP3_dp20.txt",header = T)
+stats.2R.DPGP3<- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2R.DPGP3_dp20.txt",header = T)
+stats.3L.DPGP3<- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3L.DPGP3_dp20.txt",header = T)
+stats.3R.DPGP3<- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3R.DPGP3_dp20.txt",header = T)
+stats.X.DPGP3<- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.X.DPGP3_dp20.txt",header = T)
+stats.all.DPGP3 <- rbind(stats.2L.DPGP3,stats.2R.DPGP3,stats.3L.DPGP3,stats.3R.DPGP3,stats.X.DPGP3)
+
+#Merge window-based statistics (in r5 coordinates) to r6 coordinates  
+stats.all.DPGP3 <- merge(chunks[c("Chrom.r5","BIN_START.r5","Chrom.r6","BIN_START.r6")],stats.all.DPGP3,by.x=c("Chrom.r5","BIN_START.r5"),by.y=c("Chrom","Start"),all.x=T)
+#write.table(stats.all.DPGP3,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.DPGP3_dp20_r5_and_r6.txt",quote=F,row.names=F)
+stats.all.DPGP3 <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.DPGP3_dp20_r5_and_r6.txt",head=T)
+
+#Taj.D SA####
+
+#2L
+#Import vcf, where coordinates have been converted to reference # 5
+vcf.2L.SA <- readData("/Volumes/Time_Machine_Backups/nexus_originals/South_African_sequences/2L/vcf/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.2L.SA <- sliding.window.transform(vcf.2L.SA,1000,500,type=2)
+sliding.2L.SA <- neutrality.stats(sliding.2L.SA)
+neutrality.2L.SA <- get.neutrality(sliding.2L.SA)[[1]]
+sliding.2L.SA <- linkage.stats(sliding.2L.SA,do.ZnS = T)
+linkage.2L.SA <- get.linkage(sliding.2L.SA)[[1]]
+sliding.2L.SA <- diversity.stats(sliding.2L.SA)
+diversity.2L.SA <- get.diversity(sliding.2L.SA)[[1]]
+stats.2L.SA <- cbind(neutrality.2L.SA,linkage.2L.SA,diversity.2L.SA)
+#clean up stats dataframe
+stats.2L.SA <- cbind(Row.names=rownames(stats.2L.SA),stats.2L.SA)
+rownames(stats.2L.SA) <- NULL
+stats.2L.SA <- as.data.frame(stats.2L.SA)
+stats.2L.SA$Start_End <- do.call(rbind,strsplit(as.character(stats.2L.SA$Row.names),"-"))
+stats.2L.SA$Start <- as.numeric(as.character(stats.2L.SA$Start_End[,1]))
+stats.2L.SA$End <- stats.2L.SA$Start+999
+stats.2L.SA <- factorsNumeric(stats.2L.SA)
+stats.2L.SA <- stats.2L.SA[,c(22:23,2:3,5:6,11:17)]
+stats.2L.SA$Chrom <- "2L"
+write.table(stats.2L.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2L.SA_dp20.txt",quote=F,row.names=F)
+
+#2R
+vcf.2R.SA <- readData("/Volumes/Time_Machine_Backups/nexus_originals/South_African_sequences/2R/vcf/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.2R.SA <- sliding.window.transform(vcf.2R.SA,1000,500,type=2)
+sliding.2R.SA <- neutrality.stats(sliding.2R.SA)
+neutrality.2R.SA <- get.neutrality(sliding.2R.SA)[[1]]
+sliding.2R.SA <- linkage.stats(sliding.2R.SA,do.ZnS = T)
+linkage.2R.SA <- get.linkage(sliding.2R.SA)[[1]]
+sliding.2R.SA <- diversity.stats(sliding.2R.SA)
+diversity.2R.SA <- get.diversity(sliding.2R.SA)[[1]]
+stats.2R.SA <- cbind(neutrality.2R.SA,linkage.2R.SA,diversity.2R.SA)
+#clean up stats dataframe
+stats.2R.SA <- cbind(Row.names=rownames(stats.2R.SA),stats.2R.SA)
+rownames(stats.2R.SA) <- NULL
+stats.2R.SA <- as.data.frame(stats.2R.SA)
+stats.2R.SA$Start_End <- do.call(rbind,strsplit(as.character(stats.2R.SA$Row.names),"-"))
+stats.2R.SA$Start <- as.numeric(as.character(stats.2R.SA$Start_End[,1]))
+stats.2R.SA$End <- stats.2R.SA$Start+999
+stats.2R.SA <- factorsNumeric(stats.2R.SA)
+stats.2R.SA <- stats.2R.SA[,c(22:23,2:3,5:6,11:17)]
+stats.2R.SA$Chrom <- "2R"
+write.table(stats.2R.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.2R.SA_dp20.txt",quote=F,row.names=F)
+
+
+#3L
+vcf.3L.SA <- readData("/Volumes/Time_Machine_Backups/nexus_originals/South_African_sequences/3L/vcf/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.3L.SA <- sliding.window.transform(vcf.3L.SA,1000,500,type=2)
+sliding.3L.SA <- neutrality.stats(sliding.3L.SA)
+neutrality.3L.SA <- get.neutrality(sliding.3L.SA)[[1]]
+sliding.3L.SA <- linkage.stats(sliding.3L.SA,do.ZnS = T)
+linkage.3L.SA <- get.linkage(sliding.3L.SA)[[1]]
+sliding.3L.SA <- diversity.stats(sliding.3L.SA)
+diversity.3L.SA <- get.diversity(sliding.3L.SA)[[1]]
+stats.3L.SA <- cbind(neutrality.3L.SA,linkage.3L.SA,diversity.3L.SA)
+#clean up stats dataframe
+stats.3L.SA <- cbind(Row.names=rownames(stats.3L.SA),stats.3L.SA)
+rownames(stats.3L.SA) <- NULL
+stats.3L.SA <- as.data.frame(stats.3L.SA)
+stats.3L.SA$Start_End <- do.call(rbind,strsplit(as.character(stats.3L.SA$Row.names),"-"))
+stats.3L.SA$Start <- as.numeric(as.character(stats.3L.SA$Start_End[,1]))
+stats.3L.SA$End <- stats.3L.SA$Start+999
+stats.3L.SA <- factorsNumeric(stats.3L.SA)
+stats.3L.SA <- stats.3L.SA[,c(22:23,2:3,5:6,11:17)]
+stats.3L.SA$Chrom <- "3L"
+write.table(stats.3L.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3L.SA_dp20.txt",quote=F,row.names=F)
+
+#3R
+vcf.3R.SA <- readData("/Volumes/Time_Machine_Backups/nexus_originals/South_African_sequences/3R/vcf/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.3R.SA <- sliding.window.transform(vcf.3R.SA,1000,500,type=2)
+sliding.3R.SA <- neutrality.stats(sliding.3R.SA)
+neutrality.3R.SA <- get.neutrality(sliding.3R.SA)[[1]]
+sliding.3R.SA <- linkage.stats(sliding.3R.SA)
+linkage.3R.SA <- get.linkage(sliding.3R.SA)[[1]]
+sliding.3R.SA <- diversity.stats(sliding.3R.SA)
+diversity.3R.SA <- get.diversity(sliding.3R.SA)[[1]]
+stats.3R.SA <- cbind(neutrality.3R.SA,linkage.3R.SA,diversity.3R.SA)
+#clean up stats dataframe
+stats.3R.SA <- cbind(Row.names=rownames(stats.3R.SA),stats.3R.SA)
+rownames(stats.3R.SA) <- NULL
+stats.3R.SA <- as.data.frame(stats.3R.SA)
+stats.3R.SA$Start_End <- do.call(rbind,strsplit(as.character(stats.3R.SA$Row.names),"-"))
+stats.3R.SA$Start <- as.numeric(as.character(stats.3R.SA$Start_End[,1]))
+stats.3R.SA$End <- stats.3R.SA$Start+999
+stats.3R.SA <- factorsNumeric(stats.3R.SA)
+stats.3R.SA <- stats.3R.SA[,c(22:23,2:3,5:6,11:17)]
+stats.3R.SA$Chrom <- "3R"
+write.table(stats.3R.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.3R.SA_dp20.txt",quote=F,row.names=F)
+
+#X
+vcf.X.SA <- readData("/Volumes/Time_Machine_Backups/nexus_originals/South_African_sequences/X/vcf/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
+sliding.X.SA <- sliding.window.transform(vcf.X.SA,1000,500,type=2)
+sliding.X.SA <- neutrality.stats(sliding.X.SA)
+neutrality.X.SA <- get.neutrality(sliding.X.SA)[[1]]
+sliding.X.SA <- linkage.stats(sliding.X.SA,do.ZnS = T)
+linkage.X.SA <- get.linkage(sliding.X.SA)[[1]]
+sliding.X.SA <- diversity.stats(sliding.X.SA)
+diversity.X.SA <- get.diversity(sliding.X.SA)[[1]]
+stats.X.SA <- cbind(neutrality.X.SA,linkage.X.SA,diversity.X.SA)
+#clean up stats dataframe
+stats.X.SA <- cbind(Row.names=rownames(stats.X.SA),stats.X.SA)
+rownames(stats.X.SA) <- NULL
+stats.X.SA <- as.data.frame(stats.X.SA)
+stats.X.SA$Start_End <- do.call(rbind,strsplit(as.character(stats.X.SA$Row.names),"-"))
+stats.X.SA$Start <- as.numeric(as.character(stats.X.SA$Start_End[,1]))
+stats.X.SA$End <- stats.X.SA$Start+999
+stats.X.SA <- factorsNumeric(stats.X.SA)
+stats.X.SA <- stats.X.SA[,c(22:23,2:3,5:6,11:17)]
+stats.X.SA$Chrom <- "X"
+write.table(stats.X.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.X.SA_dp20.txt",quote=F,row.names=F)
+
+stats.all.SA <- rbind(stats.2L.SA,stats.2R.SA,stats.3L.SA,stats.3R.SA,stats.X.SA)
+
+#Merge window-based statistics (in r5 coordinates) to r6 coordinates  
+stats.all.SA <- merge(chunks[c("Chrom.r5","BIN_START.r5","Chrom.r6","BIN_START.r6")],stats.all.SA,by.x=c("Chrom.r5","BIN_START.r5"),by.y=c("Chrom","Start"),all.x=T)
+#write.table(stats.all.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.SA_dp20_r5_and_r6.txt",quote=F,row.names=F)
+stats.all.SA <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.SA_dp20_r5_and_r6.txt",head=T)
+
+
+#################################
+## Population differentiation
+#################################
+
+## Import population vcfs for each chromosome arm (these have been further split)
+## Calculate Fst for each chromosome arm
+
+#2L, p1
+#vcf.2L.nexus.p1 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/2L/r5/p1/",include.unknown=T,format="VCF",FAST=T)
+sliding.2L.nexus.p1 <- sliding.window.transform(vcf.2L.nexus.p1,1000,500,type=2)
+sliding.2L.nexus.p1 <- F_ST.stats(sliding.2L.nexus.p1,list(21:84,114:200,201:405,406:432,433:543,544:742))
+fst.2L.p1 <- get.F_ST(sliding.2L.nexus.p1,pairwise=T)[[1]]
+rownames.2L.p1 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.2L.nexus.p1,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p1 <- data.frame(cbind(rownames.2L.p1,fst.2L.p1))
+names(fst.stats.p1) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+write.table(fst.stats.p1,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2L.p1.txt",quote=F,row.names=F)
+rm(sliding.2L.nexus.p1)
+#2L, p2
+#vcf.2L.nexus.p2 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/2L/r5/p2/",include.unknown=T,format="VCF",FAST=T)
+sliding.2L.nexus.p2 <- sliding.window.transform(vcf.2L.nexus.p2,1000,500,type=2)
+sliding.2L.nexus.p2 <- F_ST.stats(sliding.2L.nexus.p2,list(21:84,114:200,201:405,406:432,433:543,544:742))
+fst.2L.p2 <- get.F_ST(sliding.2L.nexus.p2,pairwise=T)[[1]]
+rownames.2L.p2 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.2L.nexus.p2,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p2 <- data.frame(cbind(rownames.2L.p2,fst.2L.p2))
+names(fst.stats.p2) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p2)
+write.table(fst.stats.p2,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2L.p2.txt",quote=F,row.names=F)
+rm(sliding.2L.nexus.p2)
+
+#2R, p1
+#vcf.2R.nexus.p1 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/2R/r5/p1/",include.unknown=T,format="VCF",FAST=T)
+sliding.2R.nexus.p1 <- sliding.window.transform(vcf.2R.nexus.p1,1000,500,type=2)
+sliding.2R.nexus.p1 <- F_ST.stats(sliding.2R.nexus.p1,list(21:84,107:193,194:398,399:425,426:534,535:731))
+fst.2R.p1 <- get.F_ST(sliding.2R.nexus.p1,pairwise=T)[[1]]
+rownames.2R.p1 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.2R.nexus.p1,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p1 <- data.frame(cbind(rownames.2R.p1,fst.2R.p1))
+names(fst.stats.p1) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p1)
+write.table(fst.stats.p1,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2R.p1.txt",quote=F,row.names=F)
+rm(sliding.2R.nexus.p1)
+#2R, p2
+#vcf.2R.nexus.p2 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/2R/r5/p2/",include.unknown=T,format="VCF",FAST=T)
+sliding.2R.nexus.p2 <- sliding.window.transform(vcf.2R.nexus.p2,1000,500,type=2)
+sliding.2R.nexus.p2 <- F_ST.stats(sliding.2R.nexus.p2,list(21:84,107:193,194:398,399:425,426:534,535:731))
+fst.2R.p2 <- get.F_ST(sliding.2R.nexus.p2,pairwise=T)[[1]]
+rownames.2R.p2 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.2R.nexus.p2,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p2 <- data.frame(cbind(rownames.2R.p2,fst.2R.p2))
+names(fst.stats.p2) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p2)
+write.table(fst.stats.p2,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2R.p2.txt",quote=F,row.names=F)
+
+#3L, p1
+#vcf.3L.nexus.p1 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/3L/r5/p1/",include.unknown=T,format="VCF",FAST=T)
+sliding.3L.nexus.p1 <- sliding.window.transform(vcf.3L.nexus.p1,1000,500,type=2)
+sliding.3L.nexus.p1 <- F_ST.stats(sliding.3L.nexus.p1,list(21:84,114:200,201:405,406:432,433:537,538:734))
+fst.3L.p1 <- get.F_ST(sliding.3L.nexus.p1,pairwise=T)[[1]]
+rownames.3L.p1 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.3L.nexus.p1,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p1 <- data.frame(cbind(rownames.3L.p1,fst.3L.p1))
+names(fst.stats.p1) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p1)
+write.table(fst.stats.p1,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3L.p1.txt",quote=F,row.names=F)
+rm(sliding.3L.nexus.p1)
+#3L, p2
+#vcf.3L.nexus.p2 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/3L/r5/p2/",include.unknown=T,format="VCF",FAST=T)
+sliding.3L.nexus.p2 <- sliding.window.transform(vcf.3L.nexus.p2,1000,500,type=2)
+sliding.3L.nexus.p2 <- F_ST.stats(sliding.3L.nexus.p2,list(21:84,114:200,201:405,406:432,433:537,538:734))
+fst.3L.p2 <- get.F_ST(sliding.3L.nexus.p2,pairwise=T)[[1]]
+rownames.3L.p2 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.3L.nexus.p2,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p2 <- data.frame(cbind(rownames.3L.p2,fst.3L.p2))
+names(fst.stats.p2) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p2)
+write.table(fst.stats.p2,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3L.p2.txt",quote=F,row.names=F)
+
+#3R, p1
+#vcf.3R.nexus.p1 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/3R/r5/p1/",include.unknown=T,format="VCF",FAST=T)
+sliding.3R.nexus.p1 <- sliding.window.transform(vcf.3R.nexus.p1,1000,500,type=2)
+sliding.3R.nexus.p1 <- F_ST.stats(sliding.3R.nexus.p1,list(21:84,114:200,201:405,406:432,433:537,538:734))
+fst.3R.p1 <- get.F_ST(sliding.3R.nexus.p1,pairwise=T)[[1]]
+rownames.3R.p1 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.3R.nexus.p1,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p1 <- data.frame(cbind(rownames.3R.p1,fst.3R.p1))
+names(fst.stats.p1) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p1)
+write.table(fst.stats.p1,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3R.p1.txt",quote=F,row.names=F)
+rm(sliding.3R.nexus.p1)
+#3R, p2
+#vcf.3R.nexus.p2 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/3R/r5/p2/",include.unknown=T,format="VCF",FAST=T)
+sliding.3R.nexus.p2 <- sliding.window.transform(vcf.3R.nexus.p2,1000,500,type=2)
+sliding.3R.nexus.p2 <- F_ST.stats(sliding.3R.nexus.p2,list(21:84,114:200,201:405,406:432,433:537,538:734))
+fst.3R.p2 <- get.F_ST(sliding.3R.nexus.p2,pairwise=T)[[1]]
+rownames.3R.p2 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.3R.nexus.p2,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p2 <- data.frame(cbind(rownames.3R.p2,fst.3R.p2))
+names(fst.stats.p2) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p2)
+write.table(fst.stats.p2,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3R.p2.txt",quote=F,row.names=F)
+
+#X, p1
+vcf.X.nexus.p1 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/X/r5/p1/",include.unknown=T,format="VCF",FAST=T)
+sliding.X.nexus.p1 <- sliding.window.transform(vcf.X.nexus.p1,1000,500,type=2)
+sliding.X.nexus.p1 <- F_ST.stats(sliding.X.nexus.p1,list(21:84,114:200,201:405,406:432,433:537,538:733))
+fst.X.p1 <- get.F_ST(sliding.X.nexus.p1,pairwise=T)[[1]]
+rownames.X.p1 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.X.nexus.p1,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p1 <- data.frame(cbind(rownames.X.p1,fst.X.p1))
+names(fst.stats.p1) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+head(fst.stats.p1)
+write.table(fst.stats.p1,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_X.p1.txt",quote=F,row.names=F)
+rm(sliding.X.nexus.p1)
+#X, p2
+vcf.X.nexus.p2 <- readData("/Volumes/Mark/Nexus/All_pops_sequences/vcfs/X/r5/p2/",include.unknown=T,format="VCF",FAST=T)
+sliding.X.nexus.p2 <- sliding.window.transform(vcf.X.nexus.p2,1000,500,type=2)
+sliding.X.nexus.p2 <- F_ST.stats(sliding.X.nexus.p2,list(21:84,114:200,201:405,406:432,433:537,538:733))
+fst.X.p2 <- get.F_ST(sliding.X.nexus.p2,pairwise=T)[[1]]
+rownames.X.p2 <- as.numeric(do.call(rbind,strsplit(as.character(rownames(get.diversity(sliding.X.nexus.p2,between = F)[[1]])),split=" -"))[,1])
+fst.stats.p2 <- data.frame(cbind(rownames.X.p2,fst.X.p2))
+names(fst.stats.p2) <- c("BIN_START","EF/FR","EF/RAL","EF/RG","EF/SA","EF/ZI","FR/RAL","FR/RG","FR/SA","FR/ZI","RAL/RG","RAL/SA","RAL/ZI","RG/SA","RG/ZI","SA/ZI")
+tail(fst.stats.p2)
+write.table(fst.stats.p2,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_X.p2.txt",quote=F,row.names=F)
+
+
+
+#Merge fst stats for all chromosome arms
+#2L
+fst.stats.2L.p1 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2L.p1.txt",head=T)
+fst.stats.2L.p2 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2L.p2.txt",head=T)
+fst.stats.2L <- rbind(fst.stats.2L.p1[1:19458,],fst.stats.2L.p2[19459:nrow(fst.stats.2L.p2),])
+fst.stats.2L$Chrom <- "2L"
+write.table(fst.stats.2L,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2L.txt",quote=F,row.names=F)
+
+#2R
+fst.stats.2R.p1 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2R.p1.txt",head=T)
+fst.stats.2R.p2 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2R.p2.txt",head=T)
+fst.stats.2R <- rbind(fst.stats.2R.p1[1:28069,],fst.stats.2R.p2[28070:nrow(fst.stats.2R.p2),])
+fst.stats.2R$Chrom <- "2R"
+write.table(fst.stats.2R,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2R.txt",quote=F,row.names=F)
+
+#3L
+fst.stats.3L.p1 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3L.p1.txt",head=T)
+fst.stats.3L.p2 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3L.p2.txt",head=T)
+fst.stats.3L <- rbind(fst.stats.3L.p1[1:20950,],fst.stats.3L.p2[20951:nrow(fst.stats.3L.p2),])
+fst.stats.3L$Chrom <- "3L"
+write.table(fst.stats.3L,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3L.txt",quote=F,row.names=F)
+
+#3R
+fst.stats.3R.p1 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3R.p1.txt",head=T)
+fst.stats.3R.p2 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3R.p2.txt",head=T)
+fst.stats.3R <- rbind(fst.stats.3R.p1[1:32071,],fst.stats.3R.p2[32072:nrow(fst.stats.3R.p2),])
+fst.stats.3R$Chrom <- "3R"
+write.table(fst.stats.3R,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_3R.txt",quote=F,row.names=F)
+
+#X
+fst.stats.X.p1 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_X.p1.txt",head=T)
+fst.stats.X.p2 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_X.p2.txt",head=T)
+fst.stats.X <- rbind(fst.stats.X.p1[1:20820,],fst.stats.X.p2[20821:nrow(fst.stats.X.p2),])
+fst.stats.X$Chrom <- "X"
+write.table(fst.stats.X,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_X.txt",quote=F,row.names=F)
+
+
+fst.stats <- rbind(fst.stats.2L,fst.stats.2R,fst.stats.3L,fst.stats.3R,fst.stats.X)
+names(fst.stats)[c(1,17)] <- c("BIN_START.r5","Chrom.r5")
+
+fst.stats <- merge(fst.stats,chunks[,c("Chrom.r5","BIN_START.r5","Chrom.r6","BIN_START.r6")],by=c("Chrom.r5","BIN_START.r5"),all.y = T)
+write.table(fst.stats,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_all_r5_and_r6.txt",quote=F,row.names=F)
+fst.stats <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_all_r5_and_r6.txt",head=T)
+
+
+###############################################
+## Antagonistic vs. non-antagonistic
+###############################################
+
+## Import windows ####
+chunks <- read.table(paste0(dir,"window_start_end_r5_r6.txt"))
+chunks$Predictor <- paste(chunks$V4,chunks$V5,sep = "_")
+names(chunks) <- c("Chrom.r5","BIN_START.r5","BIN_END.r5","Chrom.r6","BIN_START.r6","BIN_END.r6","Predictor")
+
+## Import linked selection####
+ls <- read.table(paste0(dir,"LS_map_all_chrom_r5_and_r6.txt"),header = T)
+## Import recombination rate
+rr <- read.table(paste0(dir,"recom_all_chrom_r5_and_r6.txt"),head=T)
+
+## Import Tajima's D (and other statistics) for DGRP####
+stats.all.DGRP <- read.table(paste0(dir,"stats.all.DGRP_dp20_r5_and_r6.txt"),head=T)
+names(stats.all.DGRP)[6] <- "Tajima.D_DGRP"
+## Import Tajima's D (and other statistics) for DPGP3####
+stats.all.DPGP3 <- read.table(paste0(dir,"stats.all.DPGP3_dp20_r5_and_r6.txt"),head=T)
+names(stats.all.DPGP3)[6] <- "Tajima.D_DPGP3"
+## Import Tajima's D (and other statistics) for SA####
+stats.all.SA <- read.table(paste0(dir,"stats.all.SA_dp20_r5_and_r6.txt"),head=T)
+names(stats.all.SA)[6] <- "Tajima.D_SA"
+## Import Fst for DPGP3, ZI, SA (and incidentally for some other smaller populations)####
+fst.stats <- read.table(paste0(dir,"nexus_fst_stats_all_r5_and_r6.txt"),head=T)
+
+## Import window-based REML####
+cbat <- read.table(paste0(dir,"remls.all"),head=T)
+cbat$Gene_Chr <- as.factor(cbat$Gene_Chr)
+levels(cbat$Gene_Chr) <- c("2L","2R","3L","3R","X")
+cbat$fdr <- p.adjust(cbat$LRT_P_Perm,"BH")
+names(cbat)[1:4] <- c("Predictor","Chrom.r6","BIN_START.r6","BIN_END.r6")
+
+## Combine information
+cbat <- Reduce(function(...) merge(...,by=c("Chrom.r6","BIN_START.r6"),all.x=T),list(cbat,chunks[c("Chrom.r6","BIN_START.r6","Chrom.r5","BIN_START.r5")],ls[c("Chrom.r6","BIN_START.r6","LS")],rr[c("Chrom.r6","BIN_START.r6","RR")],stats.all.DGRP[,c("Chrom.r6","BIN_START.r6","Tajima.D_DGRP")],stats.all.DPGP3[,c("Chrom.r6","BIN_START.r6","Tajima.D_DPGP3")],stats.all.SA[,c("Chrom.r6","BIN_START.r6","Tajima.D_SA")],fst.stats[,c("Chrom.r6","BIN_START.r6","RAL.ZI","SA.ZI","RAL.SA")]))
+
+#Define antagonistic window
+cbat$Candidate <- ifelse(cbat$fdr<0.1,1,0)
+names(cbat)[23:25] <- c("Fst_RAL.ZI","Fst_SA.ZI","Fst_RAL.SA")
+cbat <- cbat[order(cbat$Chrom.r6,cbat$BIN_START.r6),]
+
+## GLMs (for Tajima's D)####
+cbat$Tajima.D_DGRP.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate),],Tajima.D_DGRP~LS)$residuals
+cbat$Tajima.D_DGRP.resid[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Tajima.D_DGRP~RR)$residuals
+cbat$Tajima.D_DPGP3.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate),],Tajima.D_DPGP3~LS)$residuals
+cbat$Tajima.D_DPGP3.resid[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Tajima.D_DPGP3~RR)$residuals
+cbat$Tajima.D_SA.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate),],Tajima.D_SA~LS)$residuals
+cbat$Tajima.D_SA.resid[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Tajima.D_SA~RR)$residuals
+
+summary(aov(data=cbat,Tajima.D_DGRP.resid~Candidate))
+summary(aov(data=cbat,Tajima.D_DPGP3.resid~Candidate))
+summary(aov(data=cbat,Tajima.D_SA.resid~Candidate))
+
+## Wilcox test (for Fst)####
+cbat$Fst_RAL.SA.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate),],Fst_RAL.SA~LS)$residuals
+cbat$Fst_RAL.SA.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Fst_RAL.SA~RR)$residuals
+cbat$Fst_RAL.ZI.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate),],Fst_RAL.ZI~LS)$residuals
+cbat$Fst_RAL.ZI.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Fst_RAL.ZI~RR)$residuals
+cbat$Fst_SA.ZI.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate),],Fst_SA.ZI~LS)$residuals
+cbat$Fst_SA.ZI.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Fst_SA.ZI~RR)$residuals
+
+wilcox.test(cbat$Fst_RAL.SA.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
+wilcox.test(cbat$Fst_RAL.ZI.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
+wilcox.test(cbat$Fst_SA.ZI.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
+
+
+##################
+## LD analysis
+##################
+
+
+----- R code -----
+#LD analysis, using LD values from DPGP3
+Cand <- subset(assoc,fdr<0.3)$Predictor
+
+## Import LD info, keeping only SNPs within 1Kb
+ld_dpgp3 <- read.table(paste0(dir,"ld_dpgp3_all.ld"),head=T)
+ld_dpgp3 <- subset(ld_dpgp3,CHR_A!="CHR_A")
+ld_dpgp3$Distance <- as.numeric(as.character(ld_dpgp3$BP_B))-as.numeric(as.character(ld_dpgp3$BP_A))
+ld_dpgp3 <- subset(ld_dpgp3,Distance<=1000)
+
+## Are SNPs antagonistic or non-antagonistic?
+ld_dpgp3$SNP_A_Type <- ifelse(ld_dpgp3$SNP_A %in% Cand,"Cand","NonCand")
+ld_dpgp3$SNP_B_Type <- ifelse(ld_dpgp3$SNP_B %in% Cand,"Cand","NonCand")
+ld_dpgp3$Type <- paste(ld_dpgp3$SNP_A_Type,ld_dpgp3$SNP_B_Type,sep="_")
+ld_dpgp3$Type[ld_dpgp3$Type=="NonCand_Cand"] <- "Cand_NonCand"
+
+ld_dpgp3$R2 <- as.numeric(as.character(ld_dpgp3$R2))
+## Regress out distance
+ld_dpgp3$R2.resid <- glm(data=ld_dpgp3,R2~log(Distance))$residuals
+
+wilcox.test(ld_dpgp3$R2.resid[ld_dpgp3$Type=="NonCand_NonCand"],ld_dpgp3$R2.resid[ld_dpgp3$Type=="Cand_Cand"])
+wilcox.test(ld_dpgp3$R2.resid[ld_dpgp3$Type=="Cand_NonCand"],ld_dpgp3$R2.resid[ld_dpgp3$Type=="Cand_Cand"])
+----- /R code -----
+
+
+####################################
+## Plot Taj D, Fst and LD
+####################################
+
+## Tajima's D figure
+cbat.dgrp <- cbat[c("Chrom.r6","BIN_START.r6","Tajima.D_DGRP.resid","Candidate")]
+cbat.dgrp$Pop <- "DGRP"
+names(cbat.dgrp)[3] <- "Tajima.D.resid"
+cbat.dpgp3 <- cbat[c("Chrom.r6","BIN_START.r6","Tajima.D_DPGP3.resid","Candidate")]
+cbat.dpgp3$Pop <- "ZI"
+names(cbat.dpgp3)[3] <- "Tajima.D.resid"
+cbat.sa <- cbat[c("Chrom.r6","BIN_START.r6","Tajima.D_SA.resid","Candidate")]
+cbat.sa$Pop <- "SA"
+names(cbat.sa)[3] <- "Tajima.D.resid"
+cbat.tajd.3pops <- rbind(cbat.dgrp,cbat.dpgp3,cbat.sa)
+#Reorder levels
+cbat.tajd.3pops$Pop <- as.factor(cbat.tajd.3pops$Pop)
+cbat.tajd.3pops$Pop <- factor(cbat.tajd.3pops$Pop, levels=c("DGRP","ZI","SA"))
+
+ggplot(cbat.tajd.3pops,aes(y=Tajima.D.resid,x=factor(Candidate)))+
+  theme_bw()+
+  stat_summary(fun.y=base::mean,position=position_dodge(),geom="bar",colour="black",fill=rep(c("darkgrey","dodgerblue4"),3),alpha=0.8,size=0.7)+
+  stat_summary(fun.data=mean_se,geom="errorbar",position=position_dodge(0.9),width=0.2)+
+  xlab("Antagonistic status")+
+  theme(axis.title = element_text(size=25),axis.text = element_text(size=25),strip.text=element_text(size=25))+
+  ylab("Residual Tajima's D")+
+  coord_cartesian(ylim=c(0,0.4))+
+  facet_wrap(~Pop)
+
+## Fst figure
+cbat.fst.3pops <- rbind(cbat[c("Chrom.r6","BIN_START.r6","Fst_RAL.SA.resid","Candidate")],cbat[c("Chrom.r6","BIN_START.r6","Fst_RAL.SA.resid","Candidate")],cbat[c("Chrom.r6","BIN_START.r6","Fst_RAL.SA.resid","Candidate")])
+cbat.fst.3pops[(nrow(cbat)+1):(nrow(cbat)*2),"Fst_RAL.SA.resid"] <- cbat[,"Fst_RAL.ZI.resid"]
+cbat.fst.3pops[((nrow(cbat)*2)+1):(nrow(cbat)*3),"Fst_RAL.SA.resid"] <- cbat[,"Fst_SA.ZI.resid"]
+names(cbat.fst.3pops)[3] <- "Residual_Fst" 
+cbat.fst.3pops$Pop[1:nrow(cbat)] <- "DGRP\n-SA"
+cbat.fst.3pops$Pop[(nrow(cbat)+1):(nrow(cbat)*2)] <- "DGRP\n-ZI"
+cbat.fst.3pops$Pop[((nrow(cbat)*2)+1):(nrow(cbat)*3)] <- "SA-ZI"
+cbat.fst.3pops$Pop <- factor(cbat.fst.3pops$Pop, levels=c("DGRP\n-ZI","DGRP\n-SA","SA-ZI"))
+
+fig5b <- ggplot(cbat.fst.3pops,aes(y=Residual_Fst,x=factor(Candidate)))+
+  theme_bw()+
+  stat_summary(fun.y=base::mean,position=position_dodge(),geom="bar",colour="black",fill=rep(c("darkgrey","dodgerblue4"),3),alpha=0.8,size=0.7)+
+  stat_summary(fun.data=mean_se,geom="errorbar",position=position_dodge(0.9),width=0.2)+
+  ylab(expression(paste("Residual F"[ST])))+
+  theme(axis.title = element_text(size=25),axis.text = element_text(size=25),strip.text=element_text(size=15))+
+  xlab("Antagonistic status")+
+  coord_cartesian(ylim=c(0,-0.02))+
+  facet_wrap(~Pop)
+fig5b
+
+## LD figure
+ld_dpgp3$Distance_Bin <- cut(ld_dpgp3$Distance,breaks=seq(1,1000,25),labels=F)
+ld_dpgp3_sum <- aggregate(ld_dpgp3[c("R2")],by=list(Distance_Bin=ld_dpgp3$Distance_Bin,Type=ld_dpgp3$Type),mean,na.rm=T)
+ld_dpgp3_sum$Type <- factor(ld_dpgp3_sum$Type)
+levels(ld_dpgp3_sum$Type) <- c("Antag./antag.","Antag./control", "Control/control")
+
+fig5c <- ggplot(ld_dpgp3_sum,aes(y=R2,x=Distance_Bin*25,col=Type,linetype=Type))+
+  scale_color_manual(values=c("dodgerblue4","black","grey50"))+
+  geom_smooth(method="lm",formula = y~log(x),se=F,size=1.75,alpha=0.7)+
+  theme_bw()+
+  xlab("Distance (bp)")+
+  ylab(expression(paste("r"[ZI]^2)))+
+  theme(legend.title=element_blank(),axis.text = element_text(size=25),axis.title = element_text(size=25),legend.text = element_text(size=20),legend.key.height=unit(2,"line"),legend.key.width=unit(3,"lines"),legend.background =element_blank(),legend.position = c(0.6,0.8))+
+  scale_linetype_manual(values = c("solid","solid","dashed"))+
+  geom_point(size=2)
+fig5c
+
+## All three figure together
+library(cowplot)
+plot_grid(fig5a,fig5b,fig5c,ncol=3,align='h',labels=c("A","B","C"),rel_widths = c(3, 3, 3),axis='l',label_size=25,scale=0.9)
+----- /R code -----
