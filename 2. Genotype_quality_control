@@ -46,7 +46,7 @@ grep -Ev '1/1|2/2|3/3|4/4|5/5|6/6|7/7|8/8|,\*' < f2.lhm.snp.vcf | sed -e 's|0/1|
 map <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2.lhm.snp.map")
 map$V2 <- paste(map$V1,map$V4,sep="_")
 write.table(map,"~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2.lhm.snp.map",quote=F,sep="\t",col.names=F,row.names=F)
------ R code -----
+----- /R code -----
 
 #The identifier is Chrom_Pos, so that it can be standardised between datasets
 #Rename files, so that new file is f2.lhm.snp.map
@@ -58,7 +58,7 @@ plink --noweb --file f2.lhm.snp --make-bed --out f2.lhm.snp
 plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --make-bed --out f2c.lhm.snp
 
 ##########################
-## Quality control: Kinships and PCA 
+## Quality control: PCA 
 ##########################
 
 ## Import DGRP vcf file which has already been coordinate converted to reference #6
@@ -127,17 +127,16 @@ plink --noweb --bfile ~/Documents/data/GWAS_data/genotype_data/formatting_multis
 ## Inspect top PCs 
 ----- R code -----
 #PCA plot of LHm+DGRP (merged)
-thin <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/merged_dgrp_lhm_maf5/thin.vect")
+thin <- read.table(paste0(dir,"thin.vect"))
 thin$pop <- ifelse(thin$V1=="line","DGRP","LHM")
 
 par(mar=c(5,5,5,5))
 plot(thin[thin$pop=="LHM",c(3,4)],col="dark grey",pch=19,xlab=c("PC1"),ylab=c("PC2"),cex=1.4,cex.axis=1.3,cex.lab=1.8,xlim=c(-0.02,0.02),ylim=c(-0.15,0.12),las=1,asp=1)
 points(thin[thin$pop=="DGRP",c(3,4)],col="red",pch=4,xlab=c("PC1"),ylab=c("PC2"),cex.lab=2,cex=1.4,cex.axis=2,xlim=c(-0.06,0.09),ylim=c(-0.14,0.1))
 legend(-0.15,0.12,legend=c(expression("LH"[M]),"RAL"),col=c("dark grey","red"),pch=c(19,4),pt.cex = 1.5,bty="n",y.intersp=1,x.intersp=0.5,cex=1.7)
-
 ----- /R code -----
 
-## Based on PCA, remove outlier individual
+## Based on PCA, remove outlier individual (H029)
 plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --remove outlier.txt --make-bed --out f3c.lhm.snp
 #765764 SNPs at this stage
 
