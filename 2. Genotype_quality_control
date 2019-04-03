@@ -1,3 +1,5 @@
+dir <- "~/Desktop/PloS_Biol_revision/"
+
 ##########################
 ## CHECK SNP CALLS
 ##########################
