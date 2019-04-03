@@ -1,7 +1,7 @@
 ----- R code -----
 library(ggplot2)
 
-dir <- "~/Desktop/PloS_Biology_revision/"
+dir <- "~/Desktop/PloS_Biol_revision/"
 
 ###############
 ## Relatedness
