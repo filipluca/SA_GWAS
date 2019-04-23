@@ -21,30 +21,50 @@ dir <- "~/Desktop/PloS_Biol_revision/"
 pheno <- read.table(paste0(dir,"pheno.txt"),head=T)
 write.table(pheno,"Pheno_Data.txt",row.names=F,quote=F,sep="\t")
 
-## Fig 1A and and S4A Fig can be reproduced using this dataframe
+## Fig 1A and S4A Fig can be reproduced using this dataframe
+## See Text File #1 on github page for how to generate pheno.txt file
 
 ##############################
-## PC Matrix
+## PC Matrix file
 ##############################
+
+## Contains top 20 principal components, derived from overlapping SNPs found among LHm and DGRP datasets
+## Pruned for r2 (LD<0.2) and MAF (>0.05)
+## Columns 1 and 2 = individuals
+## Columns 3-22 = PCs 1-20
+## Column 23 = population
 
 thin <- read.table(paste0(dir,"thin.vect"))
 thin$pop <- ifelse(thin$V1=="line","DGRP","LHM")
 names(thin)[3:22] <- paste0("PC",as.numeric(substring(names(thin)[3:22],2))-2)
 write.table(thin,paste0(dir,"PC_Data.txt"),row.names=F,quote=F,sep="\t")
 
+## Fig S1A and can be reproduced using this dataframe
+## See Text File #2 on github page for how to generate thin.vect file
+
 ##############################
-## Relatedness matrix
+## Relatedness matrix file
 ##############################
 
-## This file contains pairwise kinships between all individuals retained for GWAS
+## This file contains pairwise kinships between all individuals retained for GWAS (N=202)
+## Based on Genomic relationship matrix derived from LDAK, using MAF and LD weighting
+## Columns = individuals
+## Rows = individuals
+
 kinsm <- read.table(paste0(dir,"kinsm_no_outlier.grm.raw"))
 kinsm <- as.matrix(kinsm)
 kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
 write.table(kinsm,paste0(dir,"Kinship_Data.txt"),quote=F,row.names=F,sep="\t")
 
+## Fig S1B can be reproduced using this dataframe
+## See Text File #3 on github page for how to generate kinsm_no_outlier.grm.raw file
+
 ##############################
-## LD file, LHM
+## LD in LHm file
 ##############################
+
+## This file contains mean r2 value in 25bp bins of distance
+## LD calculated using 202 individuals retained for GWAS
 
 ld_lhm <- read.table(paste0(dir,"ld_lhm_1m.ld"),head=T)
 ld_lhm <- subset(ld_lhm,CHR_A!="CHR_A")
@@ -58,8 +78,11 @@ names(ld_lhm_sum)[1] <- "Distance_Bin_Maximum_value"
 
 write.table(ld_lhm_sum,paste0(dir,"LD_LHm_Data.txt"),quote=F,row.names=F,sep="\t")
 
+## Fig S1C can be reproduced using this dataframe
+## See Text File #3 on github page for how to generate ld_lhm_1m.ld file
+
 ##############################
-## XvsA and VEP file
+## XvsA and VEP files
 ##############################
 
 #XvsA
