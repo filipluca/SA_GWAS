@@ -7,31 +7,49 @@ dir <- "~/Desktop/PloS_Biol_revision/"
 ## Relatedness
 ###############
 
-## Examine relatedness between individuals
+## Examine relatedness between individuals (this code is also required for association analysis; see file #4)
+
+##Use LD and MAF weighted data for pairwise relatedness and (later) mixed model
+
+#Cut genome into sections (default settings)
+./ldak5.mac --cut-weights sect --bfile f3c.lhm.snp
+#Calculate weightings
+./ldak5.mac --calc-weights-all sect --bfile f3c.lhm.snp
+#Get kinship matrix using weightings
+./ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.all --power -.25 --kinship-raw YES
+#First 5 principal components
+../ldak5.mac --pca kinsm_no_outlier --grm kinsm_no_outlier
+#Principal component loadings
+./ldak5.mac --calc-pca-loads kinsm_no_outlier --grm kinsm_no_outlier --bfile f3c.lhm.snp --pcastem kinsm_no_outlier
+
 ----- R code -----
+
+## Plot relatedness between individuals
 kinsm <- read.table(paste0(dir,"kinsm_no_outlier.grm.raw"))
 kinsm <- as.matrix(kinsm)
 kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
 kinsm <- as.data.frame(as.numeric(kinsm))
 names(kinsm) <- "V1"
 
-## Plot
 ggplot(kinsm,aes(V1))+theme_bw()+geom_histogram(fill="grey65",col="white",bins=50)+xlab("Genomic relationship values")+theme(axis.text=element_text(size=25),axis.title=element_text(size=30))
+
 ----- /R code -----
 
-###############
-## LD
-###############
+##############################
+## LD Decay in LHM
+##############################
 
 
-## Pairwise LD, consider SNPs up to 100kb from one another, consider SNPs with r2 values from 0 to 1
+## Pairwise LD between SNPs in LHm
+## consider SNPs up to 1mb from one another, consider SNPs with r2 values from 0 to 1
 plink --noweb --r2 --ld-window-r2 0 --ld-window-kb 1000 --bfile f3c.lhm.snp --out ld_lhm_1m
 mv ld_lhm.ld f3c.lhm.snp.ld
 rm ld_lhm.log
 rm ld_lhm.nosex
 
 ----- R code -----
-## Import LD values, LHM
+
+## Import LD values, LHm
 ld_lhm <- read.table(paste0(dir,"ld_lhm_1m.ld"),head=T)
 ld_lhm <- subset(ld_lhm,CHR_A!="CHR_A")
 ## Calculate distance between SNP positions
@@ -58,4 +76,5 @@ ggplot(ld_lhm_sum,aes(y=R2,x=Distance_Bin_Maximum_value))+
   scale_linetype_manual(values = c("solid"))+
   geom_point(size=2,col=c("dodgerblue4"))+
   ylim(c(0.4,0.8))
+  
 ----- /R code -----
