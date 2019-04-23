@@ -4,9 +4,9 @@ Welcome!
 
 This github page contains the code underlying analyses and figures presented in 'Genome-wide sexually antagonistic variants reveal long-standing constraints on sexual dimorphism in fruit flies' (Ruzicka et al. 2019, PLOS Biol). 
 
-The code is organised into files 1-9, which approximately follow the order of the analyses presented in the manuscript. The contents of each file are described in bullet-point form below. We have also annotated the code for clarity, but if it's insufficiently clear please e-mail me at filip.ruzicka [at] monash.edu, or one of the corresponding authors on the manuscript.
+The code is organised into text files 1-9, which approximately follow the order of the analyses presented in the manuscript. The text files are usually a mixture of R and UNIX scripts. The contents of each file are described in bullet-point form below. We have also annotated the code for clarity, but if it's insufficiently clear please e-mail me at filip.ruzicka [at] monash.edu, or one of the corresponding authors on the manuscript.
 
-Note also that the 9th file contains more detailed descriptions of each datafile shared on zenodo (https://zenodo.org/record/2623225). These datafiles should be sufficient to reproduce the figures presented in the manuscript, and will be the most useful objects for future users.
+Note also that the 9th text file contains more detailed descriptions of each datafile shared on zenodo (https://zenodo.org/record/2623225). The zenodo datafiles should be sufficient to reproduce the figures presented in the manuscript, and will be the most useful objects for future users.
 
 
 #### 1. Phenotype and quant. gen analysis
