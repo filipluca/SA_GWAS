@@ -1,11 +1,20 @@
 ----- R code -----
 
 ## Packages
+install.packages("car")
 library(car)
+install.packages("stringr")
 library(stringr)
+install.packages("matrixStats")
 library(matrixStats) 
+install.packages("data.table")
 library(data.table)
+install.packages("reshape2")
+library(reshape2)
+install.packages("MCMCglmm")
 library(MCMCglmm)
+install.packages("ggplot2")
+library(ggplot2)
 
 dir <- "~/Desktop/PloS_Biol_revision/"
 
@@ -29,12 +38,12 @@ fdata <- cbind(fdata[1:3],fdata.tmp)
 # Recode genotype labels
 fdata$genome <- factor(paste0("H", str_pad(string=as.character(fdata$line), width=3, pad="0")))
 
-# Get mean number of eggs per rep.
+# Get mean number of eggs per rep (rep=block)
 #Calculate # of vials which have fecundity info
 fdata$n_present <- apply(fdata[,4:8],1,function(x) sum(!is.na(x)))
-# Calculate fecundity across vials with fecundity info
+#Calculate fecundity across vials with fecundity info
 fdata$eggs <- apply(fdata[,4:8],1,function(x) sum(x[x>1],na.rm=T))
-# Calculate mean number of eggs laid per rep
+#Calculate mean number of eggs laid per rep (rep=block)
 egg.means <- aggregate(fdata[c("eggs","n_present")], list(rep=as.factor(fdata$rep)),sum,na.rm=T)
 egg.means$mean <- egg.means$eggs/egg.means$n_present
 
@@ -64,10 +73,10 @@ mdata$prop[mdata$male_density<5] <- NA
 prop.means <- aggregate(mdata$prop[mdata$male_density==5], list(rep=as.factor(mdata$rep[mdata$male_density==5])),mean, na.rm=T)
 names(prop.means)[2] <- "mean"
 
-# Standardise data for each rep
+# Normalise data for each rep
 mdata$prop_ratio_scaled[mdata$male_density==5] <- c(scale(mdata$prop[mdata$rep==1 & mdata$male_density==5]/prop.means$mean[1]),scale(mdata$prop[mdata$rep==2 & mdata$male_density==5]/prop.means$mean[2]),scale(mdata$prop[mdata$rep==3 & mdata$male_density==5]/prop.means$mean[3]),scale(mdata$prop[mdata$rep==4 & mdata$male_density==5]/prop.means$mean[4]),scale(mdata$prop[mdata$rep==5 & mdata$male_density==5]/prop.means$mean[5]))
 
-## JOINT BOTH SEXES
+## JOIN BOTH SEXES
 
 # Create joint data table for both sexes
 fitdata <- data.frame(sex=factor(c(rep("female",nrow(fdata)),rep("male",nrow(mdata)))), genome=rep(fdata$genome,2), fit=c(fdata$eggs_st_norm, mdata$prop_ratio_scaled))
@@ -100,12 +109,13 @@ HPDinterval(maleh2)
 
 # Calculate intersexual genetic correlation and CI
 rmf <- QG_model_eggs_st_norm$VCV[,2] / sqrt((QG_model_eggs_st_norm$VCV[,1]) * (QG_model_eggs_st_norm$VCV[,4]))
-#mean(rmf)
+mean(rmf)
 #[1] 0.148807
 HPDinterval(rmf)
 #lower     upper
 #var1  -0.2093967  0.4590673
 
+#QG prediction - TO BE IGNORED FOR DOWNSTREAM ANALYSES
 QG_prediction <- data.frame(genome=rep(fdata$genome,2), fit_pred=predict(QG_model_eggs_st_norm, marginal=NULL))
 
 #############################
@@ -115,10 +125,13 @@ QG_prediction <- data.frame(genome=rep(fdata$genome,2), fit_pred=predict(QG_mode
 # For each line and sex, combine fitness measurements across replicates
 mean.agg <- aggregate(fitdata$fit, list(fitdata$genome,fitdata$sex),mean,na.rm=T)
 names(mean.agg) <- c("genome","sex","fit")
+# For each line and sex, combine QG predicted fitness measurements across replicates - TO BE IGNORED FOR DOWNSTREAM ANALYSES
 pred.agg <- aggregate(QG_prediction$fit_pred, list(fitdata$genome,fitdata$sex),mean,na.rm=T)
 names(pred.agg) <- c("genome","sex","fit")
 
+# Make data table for GWAS
 data.table.for.GWAS <- data.frame(genome=mean.agg$genome[mean.agg$sex=="male"], Fit_mean_male=mean.agg$fit[mean.agg$sex=="male"], Fit_mean_female=mean.agg$fit[mean.agg$sex=="female"], Fit_pred_male=pred.agg$fit[pred.agg$sex=="male"], Fit_pred_female=pred.agg$fit[pred.agg$sex=="female"])
+# Remove mean values
 rm(mean.agg, pred.agg)
 
 # Remove superfluous columns
@@ -139,6 +152,7 @@ M_trans <- matrix(c(-1/sqrt(2),-1/sqrt(2),-1/sqrt(2),1/sqrt(2)),ncol=2)
 data.table.for.GWAS$Fit_mean_conc <- orthogonal_transform(data.table.for.GWAS$Fit_mean_male, data.table.for.GWAS$Fit_mean_female, M_trans)[,1]*(-1)
 data.table.for.GWAS$Fit_mean_antF <- orthogonal_transform(data.table.for.GWAS$Fit_mean_male, data.table.for.GWAS$Fit_mean_female, M_trans)[,2]
 
+#Rotated matrices on QG predicted fitness - TO BE IGNORED FOR DOWNSTREAM ANALYSES
 data.table.for.GWAS$Fit_pred_conc <- orthogonal_transform(data.table.for.GWAS$Fit_pred_male, data.table.for.GWAS$Fit_pred_female, M_trans)[,1]*(-1)
 data.table.for.GWAS$Fit_pred_antF <- orthogonal_transform(data.table.for.GWAS$Fit_pred_male, data.table.for.GWAS$Fit_pred_female, M_trans)[,2]
 
@@ -149,12 +163,6 @@ points(data.table.for.GWAS$Fit_mean_male[data.table.for.GWAS$IID=="H046"],data.t
 plot(data.table.for.GWAS$Fit_mean_conc, data.table.for.GWAS$Fit_mean_antF)
 points(data.table.for.GWAS$Fit_mean_conc[data.table.for.GWAS$IID=="H046"], data.table.for.GWAS$Fit_mean_antF[data.table.for.GWAS$IID=="H046"], col="red")
 
-plot(data.table.for.GWAS$Fit_pred_male, data.table.for.GWAS$Fit_pred_female)
-points(data.table.for.GWAS$Fit_pred_male[data.table.for.GWAS$IID=="H046"], data.table.for.GWAS$Fit_pred_female[data.table.for.GWAS$IID=="H046"], col="red")
-
-plot(data.table.for.GWAS$Fit_pred_conc, data.table.for.GWAS$Fit_pred_antF)
-points(data.table.for.GWAS$Fit_pred_conc[data.table.for.GWAS$IID=="H046"], data.table.for.GWAS$Fit_pred_antF[data.table.for.GWAS$IID=="H046"], col="red")
-
 write.table(data.table.for.GWAS, file=paste0(dir,"pheno.txt"), quote=F, row.names=F, sep="\t")
 
 
@@ -162,9 +170,9 @@ write.table(data.table.for.GWAS, file=paste0(dir,"pheno.txt"), quote=F, row.name
 ## PLOTTING PHENOTYPE DATA
 ##################################################
 
-pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
+pheno <- read.table(paste0(dir,"pheno.txt"),head=T)
 
-#Antagonism index
+# Antagonism index
 ggplot(pheno,aes(Fit_mean_female,Fit_mean_male,col=Fit_mean_antF))+
   geom_hline(yintercept = 0,linetype="dashed",col="black")+
   geom_vline(xintercept = 0,linetype="dashed",col="black")+
