@@ -1,4 +1,4 @@
-# SA GWAS
+# Genome-wide sexually antagonistic variants reveal long-standing constraints on sexual dimorphism in fruit flies (2019)
 
 Welcome!
 
