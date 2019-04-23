@@ -1,6 +1,7 @@
 dir <- "~/Desktop/PloS_Biol_revision/"
 
-## Note that the nomenclature 'read.table(paste0(dir,"filename"))' was added at a later stage. In some instances, the original folders where each file was located are retained
+## Note that the nomenclature 'read.table(paste0(dir,"filename"))' was added at a later stage. 
+## In some instances, the original folders where each file was located are retained
 
 ##########################
 ## CHECK SNP CALLS
