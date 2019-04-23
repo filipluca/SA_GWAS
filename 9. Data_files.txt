@@ -1,23 +1,27 @@
+## Here cna be found descriptions and code used to produce the data files uploaded to the zenodo repository
+## The 'intermediate files' (e.g. "pheno.txt", as opposed to "Pheno_Data.txt") are not uploaded to zenodo; however, they are presented here for clarity, so that one can follow the main code (files 1-8) which makes use of these intermediate data files 
+
 dir <- "~/Desktop/PloS_Biol_revision/"
 
 ##############################
 ## Phenotype file
 ##############################
 
-#Fig 1B and S4
+## This file contains (normalised, scaled and centred + averaged across blocks) male and female fitness values for each of 223 hemiclonal lines, as well as rotated phenotypic values (antagonism index and concordant index)
+## It also contains some additional columns, which can be ignored (see below for details)
+## Note that, for the purpose of the GWAS, some individuals were discarded due to relatively poor quality genomes, giving a total of N=202 individuals in the 'clean' dataset. The phenotypic values of these discarded individuals are nevertheless included in this table -- and indeed their phenotypic values were used to estimate h2 and rmf (see file 1).
+## Columns 1 and 2 = names of individuals
+## Column 3 = male fitness values
+## Column 4 = female fitness values
+## Column 5 and 6 = TO BE IGNORED
+## Column 7 = concordant index
+## Column 8 = antagonism index
+## Columns 9 and 10 = TO BE IGNORED
 
 pheno <- read.table(paste0(dir,"pheno.txt"),head=T)
 write.table(pheno,"Pheno_Data.txt",row.names=F,quote=F,sep="\t")
 
-
-##############################
-## Relatedness matrix
-##############################
-
-kinsm <- read.table(paste0(dir,"kinsm_no_outlier.grm.raw"))
-kinsm <- as.matrix(kinsm)
-kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
-write.table(kinsm,paste0(dir,"Kinship_Data.txt"),quote=F,row.names=F,sep="\t")
+## Fig 1A and and S4A Fig can be reproduced using this dataframe
 
 ##############################
 ## PC Matrix
@@ -27,6 +31,16 @@ thin <- read.table(paste0(dir,"thin.vect"))
 thin$pop <- ifelse(thin$V1=="line","DGRP","LHM")
 names(thin)[3:22] <- paste0("PC",as.numeric(substring(names(thin)[3:22],2))-2)
 write.table(thin,paste0(dir,"PC_Data.txt"),row.names=F,quote=F,sep="\t")
+
+##############################
+## Relatedness matrix
+##############################
+
+## This file contains pairwise kinships between all individuals retained for GWAS
+kinsm <- read.table(paste0(dir,"kinsm_no_outlier.grm.raw"))
+kinsm <- as.matrix(kinsm)
+kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
+write.table(kinsm,paste0(dir,"Kinship_Data.txt"),quote=F,row.names=F,sep="\t")
 
 ##############################
 ## LD file, LHM
