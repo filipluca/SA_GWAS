@@ -17,12 +17,11 @@ dir <- "~/Desktop/PloS_Biol_revision/"
 ## Column 7 = concordant index
 ## Column 8 = antagonism index
 ## Columns 9 and 10 = TO BE IGNORED
+## Fig 1A and S4A Fig can be reproduced using this dataframe
+## See Text File #1 on github page for how to generate pheno.txt file
 
 pheno <- read.table(paste0(dir,"pheno.txt"),head=T)
 write.table(pheno,"Pheno_Data.txt",row.names=F,quote=F,sep="\t")
-
-## Fig 1A and S4A Fig can be reproduced using this dataframe
-## See Text File #1 on github page for how to generate pheno.txt file
 
 ##############################
 ## PC Matrix file
@@ -33,14 +32,14 @@ write.table(pheno,"Pheno_Data.txt",row.names=F,quote=F,sep="\t")
 ## Columns 1 and 2 = individuals
 ## Columns 3-22 = PCs 1-20
 ## Column 23 = population
+## Fig S1A can be reproduced using this dataframe
+## See Text File #2 on github page for how to generate thin.vect file
 
 thin <- read.table(paste0(dir,"thin.vect"))
 thin$pop <- ifelse(thin$V1=="line","DGRP","LHM")
 names(thin)[3:22] <- paste0("PC",as.numeric(substring(names(thin)[3:22],2))-2)
 write.table(thin,paste0(dir,"PC_Data.txt"),row.names=F,quote=F,sep="\t")
 
-## Fig S1A and can be reproduced using this dataframe
-## See Text File #2 on github page for how to generate thin.vect file
 
 ##############################
 ## Relatedness matrix file
@@ -50,14 +49,13 @@ write.table(thin,paste0(dir,"PC_Data.txt"),row.names=F,quote=F,sep="\t")
 ## Based on Genomic relationship matrix derived from LDAK, using MAF and LD weighting
 ## Columns = individuals
 ## Rows = individuals
+## Fig S1B can be reproduced using this dataframe
+## See Text File #3 on github page for how to generate kinsm_no_outlier.grm.raw file
 
 kinsm <- read.table(paste0(dir,"kinsm_no_outlier.grm.raw"))
 kinsm <- as.matrix(kinsm)
 kinsm[lower.tri(kinsm,diag=TRUE)] <- NA
 write.table(kinsm,paste0(dir,"Kinship_Data.txt"),quote=F,row.names=F,sep="\t")
-
-## Fig S1B can be reproduced using this dataframe
-## See Text File #3 on github page for how to generate kinsm_no_outlier.grm.raw file
 
 ##############################
 ## LD in LHm file
@@ -65,6 +63,10 @@ write.table(kinsm,paste0(dir,"Kinship_Data.txt"),quote=F,row.names=F,sep="\t")
 
 ## This file contains mean r2 value in 25bp bins of distance
 ## LD calculated using 202 individuals retained for GWAS
+## Column 1 = Maximum distance value of given distance bin
+## Column 2 = mean r2 within given distance bin
+## Fig S1C can be reproduced using this dataframe
+## See Text File #3 on github page for how to generate ld_lhm_1m.ld file
 
 ld_lhm <- read.table(paste0(dir,"ld_lhm_1m.ld"),head=T)
 ld_lhm <- subset(ld_lhm,CHR_A!="CHR_A")
@@ -78,14 +80,19 @@ names(ld_lhm_sum)[1] <- "Distance_Bin_Maximum_value"
 
 write.table(ld_lhm_sum,paste0(dir,"LD_LHm_Data.txt"),quote=F,row.names=F,sep="\t")
 
-## Fig S1C can be reproduced using this dataframe
-## See Text File #3 on github page for how to generate ld_lhm_1m.ld file
 
 ##############################
 ## XvsA and VEP files
 ##############################
 
-#XvsA
+## File contains estimated share of total heritability contributed by a given genomic partition
+## Also includes expected share, CIs, and P value
+## Column 1 = Genomic partition (not named)
+## Column 2 = Share of antagonistic SNP heritability estimated to be explained by given partition
+## Columns 3-11 = TBA
+## Fig 2 can be reproduced using this dataframe
+## See Text File #5 on github page for how to generate XvsA.share and allperms.share files
+
 XvsA_a <- read.table(paste0(dir,"XvsA.share"),head=T)
 
 XvsA_a$q025 <- NA
@@ -120,7 +127,6 @@ obs$Component2<- factor(obs$Component2, levels=c("Upstream","Synonymous","Splice
 
 XvsA_VEP <- rbind(XvsA_a,obs)
 write.table(XvsA_VEP,paste0(dir,"Genome_Partitioning_Data.txt"),quote=F,row.names=F,sep="\t")
-
 
 ##############################
 ## Association file + additional info
