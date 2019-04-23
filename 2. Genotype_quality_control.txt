@@ -1,5 +1,7 @@
 dir <- "~/Desktop/PloS_Biol_revision/"
 
+## Note that the nomenclature 'read.table(paste0(dir,"filename"))' was added at a later stage. In some instances, the original folders where each file was located are retained
+
 ##########################
 ## CHECK SNP CALLS
 ##########################
@@ -7,12 +9,14 @@ dir <- "~/Desktop/PloS_Biol_revision/"
 ## Mark variants below quality thresholds
 ## This differs from Gilks' threshold by its omission of AN>400 (call rate) threshold (to be re-applied later)
 java -jar ~/Downloads/GenomeAnalysisTK-3.8-0-ge9d806836/GenomeAnalysisTK.jar -R ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/local_reference/dm6.fa -T VariantFiltration -V ~/Documents/data/GWAS_data/genotype_data/raw_multisample_genotypes/lhm_rg_HC_2015-09-15.vcf --filterExpression "QD<2.0" --filterName "QD" --filterExpression "FS>50.000" --filterName "FS" --filterExpression "MQ<58.00" --filterName "MQ" --filterExpression "MQRankSum<-7.0" --filterName "MQRS" --filterExpression "ReadPosRankSum<-5.0" --filterName "RPRS" -o marked.lhm_rg_HC_2015-09-15.vcf
+
 ## Remove variants below quality thresholds
 java -jar ~/Downloads/GenomeAnalysisTK-3.8-0-ge9d806836/GenomeAnalysisTK.jar -R ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/local_reference/local_reference/dm6.fa -T SelectVariants -V marked.lhm_rg_HC_2015-09-15.vcf --excludeFiltered -o f1.lhm_rg_HC_2015-09-15.vcf 
+
 ## Remove reference genomes, exclude non-variants
 java -jar ~/Downloads/GenomeAnalysisTK-3.8-0-ge9d806836/GenomeAnalysisTK.jar -R ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/local_reference/dm6.fa -T SelectVariants -V f1.lhm_rg_HC_2015-09-15.vcf --exclude_sample_name RGfi --exclude_sample_name RGil -env -o f1.noref.lhm_rg_HC_2015-09-15.vcf
 
-## Apply genotype and variant-level thresholds
+## Apply genotype and variant-level thresholds + lenient call rate filter (more stringent call rate filter to be applied later)
 vcftools --vcf f1.noref.lhm_rg_HC_2015-09-15.vcf --minDP 10 --minGQ 30 --max-missing 0.8 --recode --recode-INFO-all --out f2.lhm
 mv f2.lhm.recode.vcf f2.lhm.vcf
 
@@ -44,10 +48,14 @@ grep -Ev '1/1|2/2|3/3|4/4|5/5|6/6|7/7|8/8|,\*' < f2.lhm.snp.vcf | sed -e 's|0/1|
 #Give each variant a unique identifier, by replacing second column of MAP file
 
 ----- R code -----
-#Make Predictor ID Chrom_Pos
-map <- read.table("~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2.lhm.snp.map")
+
+## Make Predictor ID Chrom_Pos
+#Original directory was '~/Documents/data/GWAS_data/genotype_data/formatting_multisample/'
+map <- read.table(paste0(dir,"f2.lhm.snp.map"))
 map$V2 <- paste(map$V1,map$V4,sep="_")
-write.table(map,"~/Documents/data/GWAS_data/genotype_data/formatting_multisample/f2.lhm.snp.map",quote=F,sep="\t",col.names=F,row.names=F)
+
+write.table(map,paste0(dir,"f2.lhm.snp.map"),quote=F,sep="\t",col.names=F,row.names=F)
+
 ----- /R code -----
 
 #The identifier is Chrom_Pos, so that it can be standardised between datasets
@@ -56,36 +64,47 @@ write.table(map,"~/Documents/data/GWAS_data/genotype_data/formatting_multisample
 ## Make reduced-information BED/BIM files from PED/MAP
 plink --noweb --file f2.lhm.snp --make-bed --out f2.lhm.snp
 
-## Filter on allele frequency and genotype quality
+## Filter on MAF, call rate 95% and remove poor quality individual genomes (<85% call rate across a given individual)
 plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --make-bed --out f2c.lhm.snp
+
+## Filter on MAF, call rate 95%, remove poor quality individual genomes and remove outlier individual (H029)
+plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --remove outlier.txt --make-bed --out f3c.lhm.snp
+#765764 SNPs at this stage
 
 ##########################
 ## Quality control: PCA 
 ##########################
 
-## Import DGRP vcf file which has already been coordinate converted to reference #6
+## Import DGRP vcf file (which has already been coordinate converted to reference #6)
+#Imported from https://zenodo.org/record/837947#.XL6-geszbUI
+
 ## Keep only main chromosome arms
 vcftools --vcf dgrp2_dm6_dbSNP.vcf --chr chr2L --chr chr2R --chr chr3L --chr chr3R --chr chrX --chr chrM --chr chr4 --recode --out dgrp2_dm6_main_chrs
 mv dgrp2_dm6_main_chrs.recode.vcf dgrp2_dm6_main_chrs.vcf
+
 ## Make plink-compatible
 sed -e 's|chr2L|1|g' -e 's|chr2R|2|g' -e 's|chr3L|3|g' -e 's|chr3R|4|g' -e 's|chrX|5|g' -e 's|chr4|6|g' -e 's|chrM|7|g' dgrp2_dm6_main_chrs.vcf > dgrp2_dm6_main_chrs_plink_compatible.vcf
-## Depth and geno-quality filters, identical to LHm
+
+## Depth and geno quality filters, identical to LHm
 vcftools --vcf dgrp2_dm6_main_chrs_plink_compatible.vcf --minDP 10 --minGQ 30 --max-missing 0.8 --min-alleles 2 --max-alleles 2 --recode --recode-INFO-all --out dgrp.plink_compatible.vcf
 mv dgrp.plink_compatible.vcf.recode.vcf dgrp.plink_compatible.vcf
 
 ## Make ped/map
 ~/Downloads/plink_mac/plink --noweb --vcf dgrp.plink_compatible.vcf --recode --out dgrp
 #4314240 SNPs
-## Reformat map file so that the identifier is "chrom_pos". This helps standardise the identifier with the LHm dataset (see R code).
 
 ----- R code -----
-#Standardise 'Predictor' ID
+
+## Reformat map file so that the identifier is "chrom_pos". This helps standardise the identifier with the LHm dataset.
+
+#Make Predictor ID Chrom_Pos
+#Original directory was '~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/'
 map <- read.table(paste0(dir,"dgrp.map"))
 map$V2 <- paste(map$V1,map$V4,sep="_")
-write.table(paste0(map,"dgrp.map",quote=F,sep="\t",col.names=F,row.names=F))
------ /R code -----
 
-## Modified map file is renamed to 'dgrp.map', while previous map file is called 'dgrp.old.map'
+write.table(paste0(map,"dgrp.map",quote=F,sep="\t",col.names=F,row.names=F))
+
+----- /R code -----
 
 ## Make bed
 plink --noweb --file dgrp --make-bed --out f2.dgrp 
@@ -95,14 +114,13 @@ sort -k3n dgrp.map | uniq -f2 -d | cut -f2 > dupeSNP.txt
 plink --noweb --bfile f2.dgrp --exclude dupeSNP.txt --make-bed --geno 0.05 --maf 0.05 --out f2c.dgrp
 #964269 SNPs
 
-## PCA
-## Create overlap.txt file, which includes SNP identifiers across sites in DGRP and LHM
-## Exclude predictors where allele identities do not match
-
 ----- R code -----
-#make file which contains predictors which overlap between Nine and LHM, filtered for MAF<0.05
+
+## Create overlap.txt file, which includes SNP identifiers across sites in DGRP and LHM, and filtered for MAF>0.05
 dgrp.bim <- read.table(paste0(dir,"f2c.dgrp.bim"))
 lhm.bim <- read.table(paste0(dir,"f2c.lhm.snp.bim"))
+
+## Exclude predictors where allele identities do not match
 #merge by Predictor
 overlap.bim <- merge(dgrp.bim,lhm.bim,by=c("V2"))
 overlap.bim$V5.x <- as.character(overlap.bim$V5.x)
@@ -113,22 +131,26 @@ overlap.bim$V6.y <- as.character(overlap.bim$V6.y)
 inconsistent <- subset(overlap.bim,(V5.x!=V5.y & V5.x!=V6.y) | (V6.x!=V5.y & V6.x!=V6.y))$V2
 #Remove them
 overlap.clean <- subset(overlap.bim,!(V2 %in% inconsistent))
-#write.table(overlap.clean[1],paste0(dir,"overlap_dgrp_and_lhm_maf5.txt"),row.names=F,col.names=F,quote=F)
+
+write.table(overlap.clean[1],paste0(dir,"overlap_dgrp_and_lhm_maf5.txt"),row.names=F,col.names=F,quote=F)
+
 ----- /R code -----
 
 ## Overlapping datasets
 plink --noweb --bfile f2c.lhm.snp --extract ~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt --make-bed --out lhm_dgrp_intersect_maf5
 plink --noweb --bfile f2c.dgrp --extract ~/Documents/data/GWAS_data/genotype_data/formatting_dgrp/pcas/overlap_dgrp_and_lhm_maf5.txt --make-bed --out dgrp_lhm_intersect_maf5
 plink --noweb --bfile ~/Documents/data/GWAS_data/genotype_data/formatting_multisample/lhm_dgrp_intersect_maf5 --bmerge dgrp_lhm_intersect_maf5.bed dgrp_lhm_intersect_maf5.bim dgrp_lhm_intersect_maf5.fam --make-bed --out lhm_and_dgrp_maf5
+
 ## PCA on merged bed file, r2 cut-off 0.2
 ../../ldak5.mac --thin thin --bfile lhm_and_dgrp_maf5 --window-prune .2 --window-kb 10;
 ../../ldak5.mac --calc-kins-direct thin --bfile lhm_and_dgrp_maf5 --ignore-weights YES --power -0.25 --extract thin.in --kinship-raw YES;
 ../../ldak5.mac --pca thin --grm thin;
 ../../ldak5.mac --calc-pca-loads thin --bfile lhm_and_dgrp_maf5 --grm thin --pcastem thin
 
-## Inspect top PCs 
 ----- R code -----
-#PCA plot of LHm+DGRP (merged)
+
+## Inspect top PCs 
+## PCA plot of LHm+DGRP (merged)
 thin <- read.table(paste0(dir,"thin.vect"))
 thin$pop <- ifelse(thin$V1=="line","DGRP","LHM")
 
@@ -136,9 +158,12 @@ par(mar=c(5,5,5,5))
 plot(thin[thin$pop=="LHM",c(3,4)],col="dark grey",pch=19,xlab=c("PC1"),ylab=c("PC2"),cex=1.4,cex.axis=1.3,cex.lab=1.8,xlim=c(-0.02,0.02),ylim=c(-0.15,0.12),las=1,asp=1)
 points(thin[thin$pop=="DGRP",c(3,4)],col="red",pch=4,xlab=c("PC1"),ylab=c("PC2"),cex.lab=2,cex=1.4,cex.axis=2,xlim=c(-0.06,0.09),ylim=c(-0.14,0.1))
 legend(-0.15,0.12,legend=c(expression("LH"[M]),"RAL"),col=c("dark grey","red"),pch=c(19,4),pt.cex = 1.5,bty="n",y.intersp=1,x.intersp=0.5,cex=1.7)
+
+#Write out outlier.txt file
+write.table(data.frame(cbind("H029","H029")),paste0(dir,"outlier.txt"),sep="\t",row.names=F,col.names=F,quote=F)
+
 ----- /R code -----
 
-## Based on PCA, remove outlier individual (H029)
+## Filter on MAF, call rate 95%, remove poor quality individual genomes, and (based on PCA) remove outlier individual (H029)
 plink --noweb --bfile f2.lhm.snp --mind 0.15 --geno 0.05 --maf 0.05 --remove outlier.txt --make-bed --out f3c.lhm.snp
 #765764 SNPs at this stage
-
