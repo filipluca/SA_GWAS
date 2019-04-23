@@ -1,36 +1,51 @@
-library(data.table)
+install.packages("ggplot2")
 library(ggplot2)
+install.packages("GenABEL")
 library(GenABEL)
+install.packages("qqman")
 library(qqman)
+install.packages("scales")
 library(scales)
-library(qvalue)
+install.packages("data.table")
+library(data.table)
 
 dir <- "~/Desktop/PloS_Biol_revision/"
 
-#############################
-## SNP HERITABILITY OF ANTAGONISM INDEX
-#############################
+## Note that original folders are sometimes retained because paste0(dir,"filename") nomenclature was adopted later for readability
+
+###################################################
+## SNP heritability of the antagonism index
+###################################################
 
 ----- R code -----
+
 ## Make 1000 permuted phenotypes
+## Import individuals retained for GWAS
 good.indv <- read.table(paste0(dir,"f3c.lhm.snp.fam"))
 good.indv <- good.indv[,1]
 
+## Create a thousand 'pheno.txt' files where individual labels have been shuffled (but other columns are otherwise unchanged)
 set.seed(123)
 for (i in 1:1000){
+  #Original folder was '~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/'
   pheno <- read.table("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/pheno.txt",head=T)
   pheno <- subset(pheno,IID %in% good.indv)
   newcols <- sample(pheno[,1],replace=F,size=nrow(pheno))
   pheno$IID <- newcols
   pheno$FID <- newcols
-  write.table(pheno,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/1000_shuffled_phenos/pheno",i,".txt",sep = "_"),row.names=F,col.names=F,quote=F)
+  #Original folder was '~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/1000_shuffled_phenos/'
+  write.table(pheno,paste(paste0(dir,"pheno"),i,".txt",sep = "_"),row.names=F,col.names=F,quote=F)
 }
+
 ----- /R code -----
 
-## Calculate SNP heritability of the antagonism index
+## Calculate SNP heritability of the antagonism index by calculating REML estimate for true phenotypes
+## Obtain P-value by comparing this value to REML estimates for 1000 permuted phenotypes
+
+## Obtain kinship matrix
 ../ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.short --power -0.25
 ## REML, true
-../ldak5.mac --reml all --grm /reml_all/kinships.all --pheno pheno.txt --mpheno 6 
+../ldak5.mac --reml all --grm kinsm_no_outlier --pheno pheno.txt --mpheno 6 
 ## REML, permuted
 for i in *.txt; do ~/Documents/data/GWAS_data/gwas/ldak5.mac --reml ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_all/permutations/ant/$i --pheno $i --grm ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier --mpheno 6; done
 ## Extracy SNP heritabilities of permuted phenotypes
@@ -40,40 +55,36 @@ cat *.her > all.her
 rm *.reml.her
 
 ----- R code -----
-## Permuted heritabilities
-## Reml ALL, permuted
+
+## Import reml, permuted
 all.ant <- read.table(paste0(dir,"all.her"))
 names(all.ant) <- "Share"
 all.ant$Share <- as.numeric(as.character(all.ant$Share))
 ## Empirical P-value
+# Observed SNP heritability is 0.512216
 sum(all.ant$Share>0.512216)/1000
+#[1] 0.001
+
 ----- /R code -----
 
 #############################
 ## ASSOCIATION ANALYSIS
 #############################
 
-## Cut genome into sections (default settings)
-./ldak5.mac --cut-weights sect --bfile f3c.lhm.snp
-## Calculate LDAK SNP weightings
-./ldak5.mac --calc-weights-all sect --bfile f3c.lhm.snp
-## Estimate kinship matrix using by applying SNP weightings and defining MAF-effect size relationsip (LDAK recommended value=0.25)
-./ldak5.mac --calc-kins-direct kinsm_no_outlier --bfile f3c.lhm.snp --weights sect/weights.all --power -.25 --kinship-raw YES
-## Extract first 5 principal components
-../ldak5.mac --pca kinsm_no_outlier --grm kinsm_no_outlier
-## Extract Principal component loadings
-./ldak5.mac --calc-pca-loads kinsm_no_outlier --grm kinsm_no_outlier --bfile f3c.lhm.snp --pcastem kinsm_no_outlier
-
 ## Mixed model of antagonistic axis, using weighted kinship matrix as random effect
 ../ldak5.mac --linear mm --pheno pheno.txt --bfile f3c.lhm.snp --grm kinships_weighted/kinsm_no_outlier --mpheno 6
 
-## Process genome-wide association data
+#Mixed model, no correction for pop stratification (for QQ-plot, later)
+../ldak5.mac --linear mm.no.correction --pheno pheno.txt --bfile f3c.lhm.snp --mpheno 6
+
 ----- R code -----
+
+## Process genome-wide association data
 ## Import association P-values
 ## Mixed model, using weighted kinship matrix as covariate
 assoc <- read.table(paste0(dir,"mm.assoc"),head=T)
 assoc$Chromosome <- as.factor(assoc$Chromosome)
-## Plink -> non-plink format
+## Plink -> non-plink chromosome format
 levels(assoc$Chromosome) <- c("2L","2R","3L","3R","X")
 ## Benjamini-Hochberg FDR correction
 assoc$fdr <- p.adjust(assoc$Wald_P,"BH")
@@ -99,12 +110,7 @@ plot(-log10(expP),-log10(obsP),pch=19,xlab=expression(paste("Expected -log"["10"
 abline(a=0,b=1,col=2,lwd=2,lty=3)
 ## Genomic inflation factor
 estlambda(assoc$Wald_P,method="median")
------ /R code -----
 
-## Mixed model, no correction for pop stratification (used for QQ-plot comparison)
-../ldak5.mac --linear mm.no.correction --pheno pheno.txt --bfile f3c.lhm.snp --mpheno 6
-
------ R code -----
 ## QQ-plot, with no correction for relatedness
 assoc.no.correction <- read.table(paste0(dir,"mm.no.correction.assoc"),head=T)
 ord <- order(assoc.no.correction[,7])
@@ -114,14 +120,13 @@ expP <- 1:N/(N+1)
 points(-log10(expP),-log10(obsP),pch=19,xlab=expression(paste("Expected -log"["10"], "(P)")),ylab=expression(paste("Observed -log"["10"], "(P)")),cex=0.3,cex.main=1.5,cex.lab=1.2,cex.axis=1.2,col="black")
 ## Genomic inflation factor
 estlambda(assoc.no.correction$Wald_P,method="median")
------ /R code -----
-
 
 ##########################################
 ## Permutation analysis
 ##########################################
 
------ R code -----
+## Richard's code; for running permutations when individuals are unequally related
+
 estimate.mixed.model <- function( y, kinship, make.positive=TRUE ) {
   y = y[!is.na(y)]
   if ( length(y) < 1 ) return(NULL)
@@ -223,7 +228,14 @@ mixed.model.residuals <- function( y, kinship, genotypes, nperm=nperm ) {
   return(results)
 }
 
-load.data <- function( grm="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted/kinsm_no_outlier.grm.raw", pheno="~/Documents/data/GWAS_data/gwas/gemma/pheno_with_good_geno_info_no_outlier_ant.txt", geno="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/f3c.lhm.snp.ped", save.file="genetic.RData") {
+## Note that 'pheno_with_good_geno_info_no_outlier_ant.txt' (below) is a phenotype file where individuals with poor genotype information have been excluded, and where superfluous columns (i.e. those that do not correspond to antagonism index) have been removed
+
+#original folders for load.data() were
+#grm="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/kinships_weighted" 
+#pheno="~/Documents/data/GWAS_data/gwas/gemma" 
+#geno="~/Documents/data/GWAS_data/gwas/callrate95_no_outlier"
+
+load.data <- function( grm=paste0(dir,"kinsm_no_outlier.grm.raw"), pheno=paste0(dir,"pheno_with_good_geno_info_no_outlier_ant.txt"), geno=paste0(dir,"f3c.lhm.snp.ped"), save.file="genetic.RData") {
   
   print("starting load.data()")
   #Read phenotypes 
@@ -281,7 +293,8 @@ make.plots <- function(data.file="genetic.RData", nperm=1000) {
   results = mixed.model.residuals( y, K, dosages, nperm=nperm)
   print("ending mixed.model.residuals()")
   print("ending make.plots()")
-  write.table(results$pval.perm.empirical,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/richard_analysis/Empirical_p_1k",i,sep="_"),quote=F,col.names=F,row.names=F)
+  #original folder was '~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/richard_analysis/'
+  write.table(results$pval.perm.empirical,paste(paste0(dir,"Empirical_p_1k"),i,sep="_"),quote=F,col.names=F,row.names=F)
   print(i)
 }
 
@@ -293,7 +306,7 @@ for (i in 1:100){
 }
 
 
-## Import my 100,000 permutations 
+## Import 100,000 permuted P values (each 1k set of permutations has been pasted in UNIX to make 'Empirical_p_all' file)
 empirical_p_filip <- read.table(paste0(dir,"Empirical_p_all"))
 empirical_p_filip$all <- rowSums(empirical_p_filip[,1:100])*1000
 ## Get Empirical P-value across 100,000 permutations
@@ -305,12 +318,12 @@ empirical_p_filip$fdr <- p.adjust(empirical_p_filip$Pval,"BH")
 assoc$Empirical_p_100k <- empirical_p_filip$Pval
 assoc$fdr.Empirical_p_100k <- empirical_p_filip$fdr
 
-#Corr between para and empirical candidates
+## Pearson's correlation between para and empirical candidates
 cor.test(assoc$Empirical_p_100k,assoc$Wald_P)
 ## Regression slope
 summary(lm(data=assoc,Empirical_p_100k~Wald_P))
 
-## Plot
+## Plot empirical vs parametric P values
 ggplot(assoc,aes(Wald_P,Empirical_p_100k))+
   geom_point(size=0.5)+
   theme_bw()+
@@ -322,25 +335,33 @@ ggplot(assoc,aes(Wald_P,Empirical_p_100k))+
 ## Overlap between parametric and empirical 'candidates' (minimum 2,372 empirical P-values)
 assoc$Cand_parametric <- ifelse(assoc$fdr<0.3,1,0)
 assoc$Cand_empirical <- ifelse(assoc$Empirical_p_100k<sort(assoc$Empirical_p_100k)[2372],1,0)
+## Overlap table
 table(subset(assoc,fdr<0.3 | assoc$Empirical_p_100k<sort(assoc$Empirical_p_100k)[2372])$Cand_empirical,subset(assoc,fdr<0.3 | assoc$Empirical_p_100k<sort(assoc$Empirical_p_100k)[2372])$Cand_parametric)
 chisq.test(table(assoc$Cand_empirical,assoc$Cand_parametric))$expected
------ /R code -----
+
+## Mean Q value for parametric candidates, estimated using parametric and empirical approaches
+mean(assoc$fdr[assoc$Cand_parametric==1])
+#[1] 0.27149
+mean(assoc$fdr.Empirical_p_100k[assoc$Cand_parametric==1])
+#[1] 0.407448
 
 ########################################
 ## Number of independent clumps
 ########################################
 
------ R code -----
 names(assoc)[2] <- "SNP"
 #write.table(assoc,paste0(dir,"mm.assoc2"),quote=F,row.names=F)
+
 ----- /R code -----
 
 plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1 0.00092903 --clump-p2 0.1 --clump-kb 10 --clump-r2 0.4 --clump-field Wald_P --out clumped_highly_associated_r0.4_10kb
 
 ----- R code -----
+
 clumps <- read.table(paste0(dir,"clumped_highly_associated_r0.4_10kb.clumped"),head=T)
 nrow(clumps)
 #226
+
 ----- /R code -----
 
 ########################################
@@ -348,7 +369,9 @@ nrow(clumps)
 ########################################
 
 ----- R code -----
+
 ## Phenotypic plot
+pheno <- read.table(paste0(dir,"pheno.txt"),head=T)
 ggplot(pheno,aes(Fit_mean_female,Fit_mean_male,col=Fit_mean_conc))+
   geom_hline(yintercept = 0,linetype="dashed",col="black")+
   geom_vline(xintercept = 0,linetype="dashed",col="black")+
@@ -361,6 +384,7 @@ ggplot(pheno,aes(Fit_mean_female,Fit_mean_male,col=Fit_mean_conc))+
   xlim(c(-1.51,1.95))+
   ylim(c(-1.51,1.95))+
   scale_colour_gradientn(colours = c("steelblue1","red"),values=c(1,0))
+  
 ----- /R code -----
 
 ## Association mixed model of concordant index, using weighted kinship matrix
@@ -368,6 +392,7 @@ ggplot(pheno,aes(Fit_mean_female,Fit_mean_male,col=Fit_mean_conc))+
 mv conc.* assoc_mixed_model
 
 ----- R code -----
+
 ## Import concordant GWAS
 cassoc <- read.table(paste0(dir,"conc.assoc"),head=T)
 cassoc$Chromosome <- as.factor(cassoc$Chromosome)
@@ -387,4 +412,5 @@ hist(assoc$fdr_concordant,breaks=50,ylim=c(0,40000),col=rgb(1,0.5,0,0.5),add=T)
 legend(0.45,40000,legend=c("Concordant index","Antagonism index"),fill=c(rgb(1,0.5,0,0.5),rgb(0,0,1,0.5)),cex=1.2,box.lty = 0,bty="n")
 axis(1,at=c(0,0.3,0.4,0.6,0.8,1),cex.axis=1.8)
 abline(v=0.3,lwd=2,lty=3)
+
 ----- /R code -----
