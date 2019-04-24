@@ -1,7 +1,7 @@
 # Genome-wide sexually antagonistic variants reveal long-standing constraints on sexual dimorphism in fruit flies (2019)
 
 
-#### UPDATE 23.04.19: Cleaning up still required for text files 5-9 (avoid using any zenodo datafiles until new update...)
+#### UPDATE 24.04.19: Cleaning up still required for text files 6-9 (avoid using any zenodo datafiles until new update...)
 
 
 Welcome!
