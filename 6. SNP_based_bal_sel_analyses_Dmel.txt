@@ -6,6 +6,15 @@ library(gplots)
 library(data.table)
 library(cowplot)
 
+dir <- "~/Desktop/PloS_Biol_revision/"
+
+######################################################
+## PREPROCESSING
+######################################################
+
+## Note that due to the length of the code, a shortened version showing how data for chromosome arm 2R from the Zambian (DPGP3) was preprocessed is shown
+## For the actual analysis, SNP data from all populations is presented
+
 ######################################################
 ## r5 windows -> r6 windows
 ######################################################
@@ -176,10 +185,11 @@ rr <- merge(rr,chunks,by.x=c("Chrom","BIN_START"),by.y=c("Chrom.r5","BIN_START.r
   
 #write.table(rr,paste0(dir,"recom_all_chrom_r5_and_r6.txt"),quote=F,row.names=F)
 rr <- read.table(paste0(dir,"recom_all_chrom_r5_and_r6.txt"),head=T)
+
 ----- /R code -----
 
 ######################################################
-## SNP ALLELE FREQUENCIES
+## FASTA -> VCF
 ######################################################
 
 ###### Fasta -> vcf ######
@@ -187,7 +197,7 @@ rr <- read.table(paste0(dir,"recom_all_chrom_r5_and_r6.txt"),head=T)
 ## The following represents code for one chromosome arm (2R)
 ## The same code has to be replicated for each chromosome arm in turn
 ## This includes fasta to vcf steps and coordinate conversion steps
-## Note that snp-sites software is used to convert from fasta to vcf
+## SNP-sites software is used to convert from fasta to vcf
 
 ## Copy filtering scripts (downloaded from DGN website) to folder containing ".seq" files
 cp ~/Downloads/masking/* .;
@@ -286,20 +296,24 @@ mv 2R.vcf r5.vcf;
 cut -f1,2 r5.vcf > chrom_pos.txt
 
 ----- R code -----
+
 infile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/chrom_pos.txt"
 outfile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/dpgp3_2R_r5.bed"
 coordinate_conversion_function_part1(infile_path,"X",outfile_path)
+
 ----- /R code -----
 
 ## Obtain coordinate-converted files ('hglft_dpgp3_2R.bed') and error file ("hglft_dpgp3_2R.err.txt") from UCSC coordinate conversion website (manually)
 
 ----- R code -----
+
 original_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/dpgp3_2R_r5.bed"
 converted_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/hglft_dpgp3_2R.bed"
 error_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/hglft_dpgp3_2R.err.txt"
 chrom <- "2R"
 outfile_path <- "/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/"
 coordinate_conversion_function_part2(original_path,converted_path,error_path,"2R",outfile_path)
+
 ----- /R code -----
 
 ## Replace r5 vcf positions with r6 (if there are no erroneous positions)
@@ -321,6 +335,7 @@ rm r5temp*;
 ## Each chromosome arm from each population now contains a file, called 'r6.vcf', which has allele frequencies in r6 coordinates
 
 ----- R code -----
+
 ## Modify snp-sites vcf format to 'standard' vcf format
 #Import vcf file of interest
 vcf <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf_snpsites/vcf_without_reference/r6.vcf")
@@ -365,6 +380,7 @@ rm(vcf)
 rm(part1)
 rm(part2)
 rm(part3)
+
 ----- /R code -----
 
 grep '^#' r6.vcf > header.vcf; cat header.vcf body.vcf > r6/r6_modified_no_dp_filter.vcf; rm body.vcf; rm header.vcf;
@@ -375,9 +391,10 @@ grep '^#' r6.vcf > header.vcf; cat header.vcf body.vcf > r6/r6_modified_no_dp_fi
 
 vcftools --vcf /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.vcf --freq --out ~/Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.2R.frq;
 
-## Get depth information at monomorphic sites which are polymorphic in LHm
-
 ----- R code -----
+
+## Having estimated allele frequencies as above for each chromosome arm, concatenate chromosome arms
+
 dpgp3.2L <- read.table("Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.2L.frq",header = T,row.names = NULL)
 names(dpgp3.2L) <- c("Chrom","Pos","N_alleles","N_chrom","A1","A2")
 dpgp3.2L$A1_freq <- do.call(rbind,strsplit(as.character(dpgp3.2L$A1),split = ":"))[,2]
@@ -423,9 +440,15 @@ dpgp3.frq$MAF_DPGP3 <- ifelse(dpgp3.frq$A1_freq<dpgp3.frq$A2_freq,dpgp3.frq$A1_f
 dpgp3.frq$MAF_DPGP3 <- as.numeric(dpgp3.frq$MAF_DPGP3)
 #write.table(dpgp3.frq,"Documents/data/pop_gen/polymorphism/snp_based/r6/modified/dpgp3.no.dp.filter.all.frq",row.names=F,quote=F)
 
+################################################################################################################
+## Estimate additional information from LHm polymorphic sites (but monomorphic in pop of interest)
+################################################################################################################
+
+## Get depth information at monomorphic sites which are polymorphic in LHm
 ## Identify positions which require depth information
 
-GWAS.pos <- read.table(paste0(tmp,"GWAS_positions.r5.txt"))
+## 'GWAS_positions.r5.txt' file contains positions of GWAS SNPs in r5 coordinates, alongside positions in r6 coordinates (conversion code not shown, but essentially the same as above)
+GWAS.pos <- read.table(paste0(dir,"GWAS_positions.r5.txt"))
 names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
 GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
 levels(GWAS.pos$Chrom_plink) <- 1:5
@@ -452,28 +475,31 @@ write.table(subset(GWAS.pos.nodpgp3,Chrom.r5=="X")[c("Chrom.r5","Pos.r5")],"/Vol
 ----- /R code -----
 
 ## Extract allele frequencies from positions that are polymorphic in LHm but not polymorphic in population of interest
+my_awk='FNR==NR{a[FNR]=$2;next} FNR>1{for(i=1;a[i];i++) print substr($0,a[i],1)}'
+
 cd /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2L/fastas/;
 parallel -j+0 --eta --load 40% "awk '$my_awk' GWAS_positions_2L_dpgp3.r5.txt {} > {}.gwas" ::: *.fas;
 paste *.gwas > missing_gwas_2L.txt;
 rm *.gwas;
 cd /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2R/fastas/;
 parallel -j+0 --eta --load 40% "awk '$my_awk' GWAS_positions_2R_dpgp3.r5.txt {} > {}.gwas" ::: *.fas;
-paste *.gwas > missing_gwas_2L.txt;
+paste *.gwas > missing_gwas_2R.txt;
 rm *.gwas;
 cd /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr3L/fastas/;
 parallel -j+0 --eta --load 40% "awk '$my_awk' GWAS_positions_3L_dpgp3.r5.txt {} > {}.gwas" ::: *.fas;
-paste *.gwas > missing_gwas_2L.txt;
+paste *.gwas > missing_gwas_3L.txt;
 rm *.gwas;
 cd /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr3R/fastas/;
 parallel -j+0 --eta --load 40% "awk '$my_awk' GWAS_positions_3R_dpgp3.r5.txt {} > {}.gwas" ::: *.fas;
-paste *.gwas > missing_gwas_2L.txt;
+paste *.gwas > missing_gwas_3R.txt;
 rm *.gwas;
 cd /Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_ChrX/fastas/;
 parallel -j+0 --eta --load 40% "awk '$my_awk' GWAS_positions_X_dpgp3.r5.txt {} > {}.gwas" ::: *.fas;
-paste *.gwas > missing_gwas_2L.txt;
+paste *.gwas > missing_gwas_X.txt;
 rm *.gwas;
 
 ----- R code -----
+
 ## Import missing site data
 miss.2L.DPGP3 <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2L/fastas/missing_gwas_2L.txt")
 miss.2R.DPGP3 <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/dpgp3_Chr2R/fastas/missing_gwas_2R.txt")
@@ -513,9 +539,27 @@ dpgp3.frq <- rbind(dpgp3.frq,miss.DPGP3[names(dpgp3.frq)])
 dpgp3.frq <- dpgp3.frq[order(dpgp3.frq$Chrom,dpgp3.frq$Pos),]
 #write.table(dpgp3.frq,paste0(dir,"dpgp3.no.dp.filter.plus.mono.all.frq"),quote=F,row.names=F)
 
+----- /R code -----
+
+#############################################
+## LD-prune SNPs
+#############################################
+
+## Clump SNPs, in order to correlate effect sizes and MAF
+## Turchin et al. 2012 method
+## Make sure that 'Predictor' column is titled 'SNP'
+plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1 1 --clump-p2 1 --clump-kb 10 --clump-r2 0.4 --clump-field Wald_P --out clumped_r0.4_10kb
+
+
+######################################################
+## ANALYSIS
+######################################################
+
 ######################################################
 ## ANTAGONISTIC vs. NON-ANTAGONISTIC MAFs
 ######################################################
+
+----- R code -----
 
 ## Import association info
 ## Import linked selection and recombination rate values
@@ -527,7 +571,6 @@ assoc <- read.table(paste0(dir,"mm.assoc"),head=T)
 assoc$Chromosome <- as.factor(assoc$Chromosome)
 levels(assoc$Chromosome) <- c("2L","2R","3L","3R","X")
 assoc$fdr <- p.adjust(assoc$Wald_P,"BH")
-
 
 ## LS / RR info ####
 GWAS.pos <- read.table(paste0(dir,"GWAS_positions.r5.txt"))
@@ -581,16 +624,12 @@ dd$MAF_SA_incl_mono <- ifelse(((dd$N_alleles_SA==1) | (dd$N_alleles_SA==2 & dd$S
 #LS of initial MAF taken into account 
 dd$MAF.resid[!is.na(dd$LS) & dd$Chromosome!="X"] <- glm(data=subset(dd,!is.na(LS) & Chromosome!="X"),MAF~LS)$residuals
 dd$MAF.resid[!is.na(dd$RR) & dd$Chromosome=="X"] <- glm(data=subset(dd,!is.na(RR) & Chromosome=="X"),MAF~RR)$residuals
------ /R code -----
 
-## Clump SNPs, in order to avoid autocorrelations between SNPs
-plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1 1 --clump-p2 1 --clump-kb 10 --clump-r2 0.4 --clump-field Wald_P --out clumped_r0.4_10kb
 
 ##########################################
-## Matched SNP analysis ('Analysis A')
+## 'Analysis A'
 ##########################################
 
------ R code -----
 ## Consider only LD-pruned SNPs
 matched_pred <- read.table(paste0(dir,"clumped_r0.4_10kb.clumped"),head=T)
 names(matched_pred)[3] <- "Predictor"
@@ -847,7 +886,7 @@ fig4j
 sum(match_sum.sa$MAF_SA_incl_mono>obs_mean.sa)/1000
 
 ##########################################
-## Indep SNP analysis ('Analysis B')
+## 'Analysis B'
 ##########################################
 
 ## DGRP ####
@@ -967,7 +1006,7 @@ fig4k <- ggplot(subset(or1,Variable=="Absolute_Effect"),aes(y=OR,x=Dataset2,col=
 fig4k
 
 ##########################################
-## Indep SNP analysis ('Analysis C')
+## 'Analysis C'
 ##########################################
 
 ## DGRP ####
@@ -1166,4 +1205,5 @@ cor.test(df$maf2,df$es2,method="spearman")
 ####################
 
 plot_grid(fig4a,fig4b,fig4c,fig4d,fig4e,fig4f,fig4g,fig4h,fig4i,fig4j,fig4k,fig4l,ncol=4,rel_widths = c(2,2,1,2),align='v',axis='l',labels = "AUTO",label_size=20,scale=0.95)
+
 ----- /R code -----
