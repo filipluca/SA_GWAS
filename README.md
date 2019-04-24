@@ -57,6 +57,8 @@ The 9th text file contains more detailed descriptions of the datafiles shared on
 
 -Comparison of antagonistic and concordant P-values and Q-values
 
+-Degree of clustering of antagonistic SNPs
+
 #### 5. Functional analyses
 
 -Partitioning heritability into autosome vs. X
