@@ -100,7 +100,7 @@ write.table(ld_lhm_sum,paste0(dir,"LD_LHm_Data.txt"),quote=F,row.names=F,sep="\t
 ## Column 11 = Genomic partition (named)
 
 ## Fig 2 can be reproduced using this dataframe
-## See Text File #5 on github page for how to generate XvsA.share and allperms.share files
+## See Text File #5 on github page for how to generate XvsA.share, category.share and allperms.share files
 
 XvsA_a <- read.table(paste0(dir,"XvsA.share"),head=T)
 XvsA_a$q025 <- NA
