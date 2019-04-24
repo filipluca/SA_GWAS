@@ -150,6 +150,7 @@ write.table(XvsA_VEP,paste0(dir,"Genome_Partitioning_Data.txt"),quote=F,row.name
 ## Association file + additional info
 ##############################
 
+## This dataframe contains the following:
 #numeric chromosome column, for Fig 1B
 #VEP predictions (most severe), for Fig 2B and S7
 #P-values without population structure correction, for Fig S2
