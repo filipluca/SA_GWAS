@@ -1,6 +1,39 @@
-##############################
-## Partitioning h2SNP by X vs Autosome 
-##############################
+install.packages("ggplot2")
+library(ggplot2)
+install.packages("scales")
+library(scales)
+
+install.packages("dplyr")
+install.packages("plyr")
+install.packages("reshape")
+install.packages("magrittr")
+install.packages("gridExtra")
+install.packages("grid")
+library(dplyr)
+library(plyr)
+library(reshape)
+library(magrittr)
+library(gridExtra)
+library(grid)
+
+##General theme for plots
+theme_main <- function() {
+  theme_bw() +
+  theme(
+  #panel.grid.major = element_blank(),
+  #panel.grid.minor = element_blank(),
+  axis.text = element_text(size = 25),
+  axis.title = element_text(size = 30),
+  strip.text = element_text(size = 30),
+  legend.text= element_text(size = 25),
+  legend.title = element_text(size = 30),
+  plot.title = element_text(size = 40, face = "bold")
+)
+}
+
+########################################
+## Partitioning h2(SNP) by X vs Autosome 
+########################################
 
 ## SNP heritability of antagonistic phenotype, split into X vs. autosome
 
@@ -8,11 +41,14 @@
 ## Make list1 and list2 files in R; these are simply a column of predictors situated on autosomes vs X chromosome
 
 ----- R code -----
+
+#Original folder was ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/
 lhm.bim <- read.table(paste0(dir,"f3c.lhm.snp.bim"))
 list1 <- subset(lhm.bim,V1!=5)$V2  
 list2 <- subset(lhm.bim,V1==5)$V2
-write.table(list1,"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/list1",quote=F,row.names=F,col.names=F)
-write.table(list2,"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/list2",quote=F,row.names=F,col.names=F)
+write.table(list1,paste0(dir,"list1"),quote=F,row.names=F,col.names=F)
+write.table(list2,paste0(dir,"list2"),quote=F,row.names=F,col.names=F)
+
 ----- /R code -----
 
 cat list1 list2 > listALL
@@ -23,11 +59,13 @@ for i in {1..2}; do ../ldak5.mac --calc-kins reml_XvsA --bfile f3c.lhm.snp --par
 ../ldak5.mac --reml reml_XvsA/XvsA --mgrm reml_XvsA/partition.list --pheno pheno.txt --mpheno 6
 
 ----- R code -----
+
 ## Import XvsA values
 XvsA_a <- read.table(paste0(dir,"XvsA.share"),head=T)
 
 ## XvsA two-sample Z test
 2*pnorm(-abs((1.924259-0.764754)/(sqrt(0.895479+0.227921))))
+#[1] 0.2739681
 
 ## Plot
 XvsA_a$q025 <- NA
@@ -47,36 +85,37 @@ ggplot(XvsA_a,aes(y=Share,x=Component2))+
   theme(legend.position = "none",axis.text.y = element_text(size=25),axis.text.x = element_text(size=25),axis.title.y=element_blank(),axis.title.x=element_text(size=25),panel.spacing = unit(2, "lines"))+
   scale_y_continuous(limits=c(-0.25,1.25))+
   coord_flip()
------ /R code -----
 
 ##############################
 ## Paritioning h2SNP by VEP 
 ##############################
 
------ R code -----
+
+## Import variant effects for each GWAS SNP
+## Clean dataframe
 veps <- read.table(paste0(dir,"VEP_all_severe.txt"))
 veps$Chromosome <- do.call(rbind,strsplit(as.character(veps$V1),split = "_"))[,1]
 veps$Chromosome <- as.factor(veps$Chromosome)
 veps$Basepair <- do.call(rbind,strsplit(as.character(veps$V1),split = "_"))[,2]
 names(veps)[4] <- "Consequence"
 
-## Merge association with VEP
-assoc <- read.table(paste0(dir,"mm.assoc",head=T))
+## Merge GWAS data with VEP
+#Original folder was ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/assoc_mixed_model/
+assoc <- read.table(paste0(dir,"mm.assoc"),head=T)
 assoc$Chromosome <- as.factor(assoc$Chromosome)
 ## Plink -> non-plink format
 levels(assoc$Chromosome) <- c("2L","2R","3L","3R","X")
-## Benjamini-Hochberg FDR correction
-assoc$fdr <- p.adjust(assoc$Wald_P,"BH")
 assoc <- merge(assoc,veps[,c("Chromosome","Basepair","Consequence")],by=c("Chromosome","Basepair"),all.x=T)
 
-## Prepare REML for true VEP annotation
+## Prepare REML analysis for true VEP annotation
 veps.sub <- subset(assoc,Consequence %in% c("3_prime_UTR_variant","5_prime_UTR_variant","downstream_gene_variant","intergenic_variant","intron_variant","missense_variant","non_coding_transcript_exon_variant","splice_region_variant","synonymous_variant","upstream_gene_variant"))
 veps.sub$Consequence <- as.factor(as.character(veps.sub$Consequence))
+#Original folder was '~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/'
 for (i in c(1:10)){
-  write.table(subset(veps.sub,Consequence==levels(Consequence)[i])$Predictor,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/cat",i,sep="_"),row.names = F,quote=F,col.names=F)
+  write.table(subset(veps.sub,Consequence==levels(Consequence)[i])$Predictor,paste(paste0(dir,"cat"),i,sep="_"),row.names = F,quote=F,col.names=F)
 }
 
-## Prepare REML using 'circular permutations' of VEP annotations
+## Prepare REML analysis using 'circular permutations' of VEP annotations
 veps.sub <- subset(assoc,Consequence %in% c("3_prime_UTR_variant","5_prime_UTR_variant","downstream_gene_variant","intergenic_variant","intron_variant","missense_variant","non_coding_transcript_exon_variant","splice_region_variant","synonymous_variant","upstream_gene_variant"))
 veps.sub$Basepair <- as.numeric(veps.sub$Basepair)
 veps.sub <- veps.sub[order(veps.sub$Chromosome,veps.sub$Basepair),]
@@ -84,15 +123,21 @@ veps.sub$Consequence <- as.factor(as.character(veps.sub$Consequence))
 
 set.seed(123)
 for (j in 1:1000){
+  #Make vector of predictors that is double the size of true vector
   v <- c(as.character(veps.sub$Predictor),as.character(veps.sub$Predictor))
+  #From true vector, pick random predictor as starting point; extract its row number
   st <- which(veps.sub$Predictor==sample(veps.sub$Predictor,size=1))
+  #create vector of predictors which starts at 'st', and finishes at st+nrow(true vector of predictors)
   perm_v <- v[st:(st+(nrow(veps.sub)-1))]
+  #cbind this permuted vector with original, unpermuted VEP consequences
   perm_d <- data.frame(perm_v,veps.sub$Consequence)
   names(perm_d) <- c("Predictor","Consequence")
+  #Original folder was "~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_categories_perm/"
   for (i in 1:10){
-    write.table(subset(perm_d,Consequence==levels(Consequence)[i])$Predictor,paste("~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/reml_categories_perm/perm",j,"cat",i,sep="_"),row.names = F,quote=F,col.names=F)
+    write.table(subset(perm_d,Consequence==levels(Consequence)[i])$Predictor,paste(paste0(dir,perm),j,"cat",i,sep="_"),row.names = F,quote=F,col.names=F)
   }
 }
+
 ----- /R code -----
 
 ## REML for observed
@@ -106,7 +151,7 @@ for i in {1..10}; do ../ldak5.mac --calc-kins reml_categories --bfile f3c.lhm.sn
 ../ldak5.mac --reml category --mgrm reml_categories/partition.list --pheno pheno.txt --mpheno 6
 
 ## REML for permuted
-#for j in {1..1000}; 
+for j in {1..1000}; 
 do cat perm_${j}_cat_* > perm_${j}_cat_all; 
 ../../ldak5.mac --cut-weights sect_categories --bfile ../f3c.lhm.snp --extract perm_${j}_cat_all; 
 ../../ldak5.mac --calc-weights-all sect_categories --bfile ../f3c.lhm.snp --extract perm_${j}_cat_all; 
@@ -118,13 +163,15 @@ for i in {1..10}; do ../../ldak5.mac --calc-kins reml_categories_${j} --bfile ..
 cat *.share > allperms.share
 
 ----- R code -----
-## Observed and permuted output
+
 allperms <- read.table(paste0(dir,"allperms.share"),head=T)
+## Clean up
 allperms <- subset(allperms,Component!="Component")
 allperms$Component <- factor(allperms$Component, levels=c("Share_K1","Share_K2","Share_K3","Share_K4","Share_K5","Share_K6","Share_K7","Share_K8","Share_K9","Share_K10"))
+## Import unpermuted output
 obs <- read.table(paste0(dir,"category.share"),head=T)
 
-## Get quantiles and P-values for each VEP category
+## Get means, quantiles and P-values for each VEP category
 share <- list()
 q025 <- list()
 q975 <- list()
@@ -141,8 +188,15 @@ obs$q025 <- unlist(q025)
 obs$q975 <- unlist(q975)
 obs$mean <- unlist(mean)
 obs$pval <- unlist(pval)
+## Give partitions sensible names
 obs$Component2 <-  factor(c("3' UTR","5' UTR","Downstream","Intergenic","Intron","Missense","Non-coding transcript exon","Splice region","Synonymous","Upstream"))
+## Reorder factors for plot, so that annotations appear in alphabetical order
 obs$Component2 <- factor(obs$Component2, levels=c("Upstream","Synonymous","Splice region","Non-coding transcript exon","Missense","Intron","Intergenic","Downstream","5' UTR","3' UTR"))
+## Remove superfluous information
+obs$SD <- NA
+obs$Expected <- NA
+obs$Enrichment <- NA
+obs$SD.1 <- NA
 
 ## Plot
 ggplot(obs,aes(y=Share,x=Component2,col=factor(pval<0.05)))+
@@ -157,4 +211,405 @@ ggplot(obs,aes(y=Share,x=Component2,col=factor(pval<0.05)))+
   geom_vline(xintercept = 11,cex=1)+
   theme(legend.position = "none",axis.text = element_text(size=25),axis.title.x=element_text(size=25),axis.title.y=element_blank(),panel.spacing = unit(2, "lines"),strip.background = element_rect(fill=c("grey80")),strip.text = element_text(size=25))+
   scale_y_continuous(limits=c(-2,2.2),oob=rescale_none)
+  
 ----- /R code -----
+
+####################################################################
+## X vs A analysis: comparing antagonistic vs. non-antagonistic SNPs 
+####################################################################
+
+####Read SNP dataset
+GWAS_SNP <-  read.table("Full_SNP_FILE", header = T)
+
+##Recode non-antagonistic SNPs to 0
+GWAS_SNP$Candidate[is.na(GWAS_SNP$Candidate)] <- 0
+
+####Chromosomal distributions of SNPs
+####All SNPs
+##get chromosomal distributions of all SNPs
+snp_dist <- as.data.frame(table(GWAS_SNP$Chromosome)) %>%
+.[.$Var1 == "2L" | .$Var1 == "2R" | .$Var1 == "3L" | .$Var1 == "3R" | .$Var1 == "X",]
+
+##Add overall lengths of chromosome arms
+snp_dist$length <- c(23513712, 25286936, 28110227, 32079331, 23542271)
+
+##get expeected frequencies of SNPs
+snp_dist$exp_freq <- (chisq.test(snp_dist[,2:3])$expected)[,1]
+
+##Tidy up names
+names(snp_dist) <- c("Chrom", "snp_freq", "all_freq", "exp_snp_freq")
+
+##perform Z-tests for enrichment
+p_obs = snp_dist$snp_freq / snp_dist$all_freq
+p_exp = snp_dist$exp_snp_freq / snp_dist$all_freq
+n = snp_dist$all_freq
+
+oneSamp_Z_test <- function(p_obs, p_exp, n){
+Z <- (p_obs - p_exp) / sqrt(p_exp*(1 - p_exp) / n)
+return(as.data.frame(c(Z, 2*pnorm(abs(Z), lower.tail=F))))}
+
+snp_dist$stat <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n)) %>% .[1:5,]
+snp_dist$p <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n)) %>% .[6:10,]
+
+##Correct for multiple tests
+snp_dist$FDR <- p.adjust(snp_dist$p, method = "fdr")
+snp_dist$Sig <- ifelse(snp_dist$FDR <= 0.05, 1, 0)
+
+
+####Candidate SNP chromosomal enrichment
+all_snps_chrom <- GWAS_SNP[GWAS_SNP$Chromosome == "2L" | GWAS_SNP$Chromosome == "2R" | GWAS_SNP$Chromosome == "3L" | GWAS_SNP$Chromosome == "3R" | GWAS_SNP$Chromosome == "X",]
+
+candidate_snps_chrom <- GWAS_SNP[GWAS_SNP$Chromosome == "2L" | GWAS_SNP$Chromosome == "2R" | GWAS_SNP$Chromosome == "3L" | GWAS_SNP$Chromosome == "3R" | GWAS_SNP$Chromosome == "X",] %>% .[.$Candidate == 1,]
+
+chrom_count_all <- as.data.frame(table(all_snps_chrom$Chromosome))
+chrom_count_cand <- as.data.frame(table(candidate_snps_chrom$Chromosome))
+
+##Tidy names
+names(chrom_count_all) <- c("Chrom", "Count_all")
+names(chrom_count_cand) <- c("Chrom", "Count_cand")
+
+##Combine
+cand_snp_dist <- merge(chrom_count_all, chrom_count_cand, by = "Chrom")
+
+##get expected frequencies of candidate SNPs on each chromsome arm
+cand_snp_dist$Exp_count_cand <- (chisq.test(cand_snp_dist[,2:3])$expected)[,2]
+
+##perfrom Z-tests for enrichment
+p_obs = cand_snp_dist$Count_cand / cand_snp_dist$Count_all
+p_exp = cand_snp_dist$Exp_count_cand / cand_snp_dist$Count_all
+n = cand_snp_dist$Count_all
+
+oneSamp_Z_test <- function(p_obs, p_exp, n){
+Z<-(p_obs - p_exp)/sqrt(p_exp*(1-p_exp) / n)
+return(as.data.frame(c(Z, 2*pnorm(abs(Z),lower.tail=F))))}
+
+cand_snp_dist$stat <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n)) %>% .[1:5,]
+cand_snp_dist$p <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n))%>% .[6:10,]
+
+##Correct for multiple tests
+cand_snp_dist$FDR <- p.adjust(cand_snp_dist$p, method = "fdr")
+cand_snp_dist$Sig <- ifelse(cand_snp_dist$FDR <= 0.05, 1, 0)
+
+##Save output data
+write.table(cand_snp_dist, file= "S6A_Data.txt", quote = F, row.names = F)
+
+##Combine autosomes and perform overall test
+cand_snp_dist$Chrom_type <- c("Autosomes", "Autosomes", "Autosomes", "Autosomes", "X-Chromosome")
+
+cand_snp_dist_type <- cand_snp_dist[, c(9,1:3)] %>%
+ddply(. , "Chrom_type", summarise, sum_count_all = sum(Count_all), sum_count_cand = sum(Count_cand))
+
+##get expected frequencies of candidate SNPs on X and autosomes
+cand_snp_dist_type$Exp_count_cand <- (chisq.test(cand_snp_dist_type[,2:3])$expected)[,2]
+
+##Perform Z-tests for enrichment
+##perfrom Z-tests for enrichment
+p_obs = cand_snp_dist_type$sum_count_cand / cand_snp_dist_type$sum_count_all
+p_exp = cand_snp_dist_type$Exp_count_cand / cand_snp_dist_type$sum_count_all
+n = cand_snp_dist_type$sum_count_all
+
+oneSamp_Z_test<-function(p_obs,p_exp,n){
+Z<-(p_obs-p_exp)/sqrt(p_exp*(1-p_exp)/n)
+return(as.data.frame(c(Z,2*pnorm(abs(Z),lower.tail=F))))}
+
+cand_snp_dist_type$stat <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n)) %>% .[1:2,]
+cand_snp_dist_type$p <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n))%>% .[3:4,]
+cand_snp_dist_type$Sig <- ifelse(cand_snp_dist_type$p <= 0.05, 1, 0)
+
+##Save output data
+write.table(cand_snp_dist_type, file="S6B_Data.txt", quote = F, row.names = F)
+
+##################
+
+##FigS6A - use FigS6A datafile
+cand_snp_dist <- read.table("S6A_Data.txt", header = T)
+
+Cand_snp_chrom_dist <- ggplot(cand_snp_dist, aes(x = Chrom, y = stat, fill = as.character(Sig))) +
+geom_bar(stat = "identity") +
+theme_main() +
+ylab("Z-test statistic") +
+xlab("Chromosome arm") +
+geom_hline(yintercept = 0, col = "black") +
+scale_fill_manual(values = c("lightblue", "dodgerblue4")) +
+guides(fill = F) +
+ggtitle("A")
+
+##FigS6B - use FigS6B datafile
+cand_snp_dist_type <- read.table("S6B_Data.txt", header = T)
+
+Cand_snp_chrom_dist_type <- ggplot(cand_snp_dist_type, aes(x = Chrom_type, y = stat, fill = as.character(Sig))) +
+geom_bar(stat = "identity") +
+theme_main() +
+ylab("Z-test statistic") +
+xlab("") +
+geom_hline(yintercept = 0, col = "black") +
+scale_fill_manual(values = c("lightblue", "dodgerblue4")) +
+guides(fill = F) +
+ggtitle("B")
+
+####################################################################
+## VEP analysis: comparing antagonistic vs. non-antagonistic SNPs 
+####################################################################
+
+###Read in output from online VEP tool
+##Candidate VEP
+vep_candidate <- read.table("VEP_candidate_output.txt", header = T)
+
+##All vep
+vep_all <- read.table("VEP_all_output.txt", header = T)
+
+##Summarise VEP data
+vep_all_sum <- vep_all[,c(2, 4, 7)] %>% unique
+vep_cand_sum <- vep_candidate[,c(2, 4, 7)] %>% unique
+
+summary_cons_all <- as.data.frame(table(vep_all_sum$Consequence))
+summary_cons_cand <- as.data.frame(table(vep_cand_sum$Consequence))
+
+##Tidy names
+names(summary_cons_all) <- c("Consequence", "All_freq")
+names(summary_cons_cand) <- c("Consequence", "Cand_freq")
+
+##Combine cand and all conseqeunces
+com_con <- merge(summary_cons_all, summary_cons_cand, by= "Consequence")
+
+##Add expected frequency collumn
+com_con$Exp_cand_freq <- (chisq.test(com_con[,2:3])$expected)[,2]
+
+#######################
+
+##Fig S6C - use S6C datafile
+com_con <- read.table("S6C_Data.txt", header = T)
+
+##First improve labels for plot
+com_con$Consequence2[com_con$Consequence == "3_prime_UTR_variant"] <- "3'-UTR"
+com_con$Consequence2[com_con$Consequence == "5_prime_UTR_variant"] <- "5'-UTR"
+com_con$Consequence2[com_con$Consequence == "downstream_gene_variant"] <- "Downstream"
+com_con$Consequence2[com_con$Consequence == "intergenic_variant"] <- "Intergenic"
+com_con$Consequence2[com_con$Consequence == "intron_variant"] <- "Intronic"
+com_con$Consequence2[com_con$Consequence == "intron_variant,non_coding_transcript_variant"] <- "Intronic / non-coding transcript"
+com_con$Consequence2[com_con$Consequence == "missense_variant"] <- "Missense"
+com_con$Consequence2[com_con$Consequence == "non_coding_transcript_exon_variant"] <- "Exon / non-coding transcript"
+com_con$Consequence2[com_con$Consequence == "splice_acceptor_variant"] <- "Splice acceptor"
+com_con$Consequence2[com_con$Consequence == "splice_donor_variant"] <- "Splice donor"
+com_con$Consequence2[com_con$Consequence == "splice_region_variant,intron_variant"] <- "Intronic / splice region"
+com_con$Consequence2[com_con$Consequence == "splice_region_variant,synonymous_variant"] <- "Synonymous / splice region"
+com_con$Consequence2[com_con$Consequence == "synonymous_variant"] <- "Synonymous"
+com_con$Consequence2[com_con$Consequence == "upstream_gene_variant"] <- "Upstream"
+
+##Plot
+var_con_plot <- ggplot(com_con, aes(x = Consequence2, y = stat, fill = as.character(Sig)))+
+geom_bar(stat = "identity", alpha = 0.9) +
+ylim(-7.5, 7.5) +
+geom_hline(yintercept = 0) +
+ylab("Z-test statistic") +
+xlab("Variant type") +
+theme_main() +
+guides(fill = F) +
+scale_fill_manual(values = c("lightblue", "dodgerblue4")) +
+coord_flip()+
+scale_x_discrete(limits = com_con$Consequence2[order(abs(com_con$stat))]) +
+ggtitle("C")
+
+###perform z test
+p_obs = com_con$Cand_freq / com_con$All_freq
+p_exp = com_con$Exp_cand_freq / com_con$All_freq
+n = com_con$All_freq
+
+oneSamp_Z_test <- function(p_obs, p_exp, n){
+Z<-(p_obs - p_exp)/sqrt(p_exp*(1 - p_exp) / n)
+return(as.data.frame(c(Z, 2*pnorm(abs(Z),lower.tail=F))))}
+
+com_con$stat <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n)) %>% .[1:14,]
+com_con$p <- as.data.frame(oneSamp_Z_test(p_obs, p_exp, n))%>% .[15:28,]
+
+##Correct for multiple tests
+com_con$FDR <- p.adjust(com_con$p, method = "fdr")
+com_con$Sig <- ifelse(com_con$FDR <= 0.05, 1, 0)
+
+##Save output data
+write.table(com_con, file="S6C_Data.txt", row.names=F, quote=F)
+
+
+###########################
+####Gene based analyses####
+###########################
+
+####Generating gene dataset from VEP results
+VEP_candidate_genes <- vep_cand_sum %>% subset(Gene != "-") %>% .[,3] %>% as.data.frame() %>% unique()
+VEP_all_genes <- vep_all_sum %>% subset(Gene != "-") %>% .[,3] %>% as.data.frame() %>% unique()
+
+####Generate combined gene dataset
+VEP_candidate_genes$Candidate_gene <- 1
+names(VEP_candidate_genes)[1] <- "Gene"
+names(VEP_all_genes)[1] <- "Gene"
+
+VEP_genes_com <- merge(VEP_all_genes, VEP_candidate_genes, by = "Gene", all.x = T)
+VEP_genes_com$Candidate_gene[is.na(VEP_genes_com$Candidate)] <- 0
+
+write.table(VEP_genes_com, file = "VEP_gene_list_complete.txt", row.names = F, quote = F, col.names = T)
+
+####Rename for ease
+genes <- VEP_genes_com
+
+############################################
+####Sex-biassed gene expression analyses####
+############################################
+
+##Read in Sebida data
+sebida <- read.table("Sebida_data.txt", header=T)
+
+##Combine sebida data with gene list
+GWAS_gene_SB <- merge(genes, sebida, by = "Gene")
+
+####Qualitative test####
+##Perform Chi2 test for enrichment
+CSB <- nrow(GWAS_gene_SB[GWAS_gene_SB$Candidate_gene == 1 & GWAS_gene_SB$new_class == "Biased",])
+NCSB <- nrow(GWAS_gene_SB[GWAS_gene_SB$Candidate_gene == 0 & GWAS_gene_SB$new_class == "Biased",])
+CNSB <- nrow(GWAS_gene_SB[GWAS_gene_SB$Candidate_gene == 1 & GWAS_gene_SB$new_class == "Unbiased",])
+NCNSB <- nrow(GWAS_gene_SB[GWAS_gene_SB$Candidate_gene == 0 & GWAS_gene_SB$new_class == "Unbiased",])
+
+a <- matrix(c(CSB, NCSB, CNSB, NCNSB), ncol = 2)
+chisq.test(a)$expected
+
+####Quantitative test using degree of sex bias####
+##Add collumn of abolsute sex bias
+GWAS_SB <- GWAS_gene_SB
+GWAS_SB$absolute_mf <- abs(log2(GWAS_SB$m_f))
+
+##write out datafile
+write.table(GWAS_SB, file = "Fig3A_Data.txt", quote = F, row.names = F)
+
+##Test whether absolute degree of sex bias is lower for candidate genes
+wilcox.test(GWAS_SB$absolute_mf[GWAS_SB$Candidate_gene == 1], GWAS_SB$absolute_mf[GWAS_SB$Candidate_gene == 0])
+
+####Tests for the 'Twin-peaks model'
+GWAS_gene_SB2 <- na.omit(GWAS_SB[,c("Candidate_gene", "log2_m_f")])
+a <- as.factor(GWAS_gene_SB2$Candidate_gene)
+x <- GWAS_gene_SB2$log2_m_f
+
+###Testing the quadratic term
+quadratic_model <- glm(a ~ x + I(x^2), family = "binomial")
+quadratic_model_update <- update(quadratic_model ,~.- I(x^2))
+anova(quadratic_model_update, quadratic_model, test = "Chi")
+
+###Testing the full polynomial against the quadratic model:
+full_poly_model <- glm(a ~ x + I(x^2) + I(x^3) + I(x^4), family = "binomial")
+anova(quadratic_model, full_poly_model, test = "Chi")
+
+###########################
+
+##Plot results - Fig3A, B
+##Fig3A - use Fig3A datafile
+GWAS_SB <- read.table("Fig3A_Data.txt", header = T)
+
+boxplot_sb <- ggplot(GWAS_SB, aes(x = as.character(Candidate_gene), y = absolute_mf, fill = as.character(Candidate_gene))) +
+geom_boxplot(alpha = 0.6) +
+coord_flip() +
+guides(fill = F) +
+scale_fill_manual(values = c("darkgrey", "dodgerblue4")) +
+theme_main() +
+theme(axis.ticks = element_blank(), axis.title = element_blank(), axis.text = element_blank())
+
+density_sb <- ggplot(GWAS_SB, aes(x = absolute_mf, group = as.character(Candidate_gene), fill = as.character(Candidate_gene))) +
+geom_density(alpha = 0.6) +
+theme_main() +
+guides(fill = F) +
+xlab("Degree of sex-bias") +
+ylab("Density") +
+scale_fill_manual(values = c("darkgrey", "dodgerblue4"))
+
+##Stack plots
+p1 <- ggplot_gtable(ggplot_build(boxplot_sb))
+p2 <- ggplot_gtable(ggplot_build(density_sb))
+
+maxWidth = unit.pmax(p1$widths[2:3], p2$widths[2:3])
+
+p1$widths[2:3] <- maxWidth
+p2$widths[2:3] <- maxWidth
+
+Fig3A <- grid.arrange(p1, p2, heights = c(1, 3))
+
+##Generating Fig3B
+##Order dataset and bin in to 100-gene sets
+GWAS_gene_SB2 <- GWAS_gene_SB2[order(GWAS_gene_SB2$log2_m_f),]
+GWAS_gene_SB2$bin <- rep(1:ceiling(nrow(GWAS_gene_SB2)/100), each = 100)[1:nrow(GWAS_gene_SB2)]
+
+##Calculate summaries over each bin
+GWAS_prop_sb <- GWAS_gene_SB2 %>%
+group_by(bin) %>%
+summarise(meanSB = mean(log2_m_f, na.rm = T), sum_can = sum(Candidate_gene), tot = length(Candidate_gene))
+GWAS_prop_sb$prop_ant <- GWAS_prop_sb$sum_can / GWAS_prop_sb$tot
+
+##write out dataframe
+write.table(GWAS_prop_sb, file = "Fig3B_Data.txt", quote = F, row.names = F)
+
+##Generate plot - Fig3b - use Fig3B datafile
+GWAS_prop_sb <- read.table("Fig3B_Data.txt", header = T)
+
+Fig3B <- ggplot(GWAS_prop_sb, aes(x = meanSB, y = prop_ant)) +
+geom_point() +
+stat_smooth(method="lm", formula = y ~ poly(x, 2)) +
+xlab("M/F sex-bias") +
+geom_vline(xintercept = 0, linetype = "longdash", size = 1, alpha = 0.4) +
+ylab("Fraction of genes") +
+theme_main() +
+ggtitle("B")
+
+##Combined plot as seen in manuscript
+Fig3AB <- grid.arrange(Fig3A, Fig3B, ncol = 2)
+
+
+######################################################
+####Pleiotropy analyses####
+######################################################
+
+####Tau - tissue expression breadth
+##Get Tau data
+tau <- read.table("Tau_gene.txt", header = T)
+
+##combine with gene set
+tau_gwas <- merge(genes, tau, by = "Gene")
+
+##Remove sex-limited genes by using extreme sex-bias from sebida data
+###just get biassed genes
+sebida_biased <- na.omit(sebida[sebida$new_class == "Biased",])
+
+###Define sex-limited genes based on extreme tails of distributions 5%
+quantile(sebida_biased$log2_mf[sebida_biased$class == "Female"], probs = c(0.05)) #-2.18
+quantile(sebida_biased$log2_mf[sebida_biased$class == "Male"], probs = c(0.95)) #4.12
+
+##Filter based on these cutoffs
+sebida$log2_mf <- log2(sebida$m_f)
+sebida$sex_lim <- "NA"
+sebida$sex_lim <- ifelse(sebida$class == "Male" & sebida$log2_mf >= 4.12 | sebida$class == "Female" & sebida$log2_mf <= -2.18 , "Yes", "No")
+
+sebida_filtered <- sebida[sebida$sex_lim == "No",]
+
+###Use sebida_filtered to remove sex-lim genes from pleiotropy analysis
+tau_com_sex_filt <- merge(tau_gwas, sebida_filtered, by = "Gene")
+
+##test association
+wilcox.test(tau_com_sex_filt$m_tau[tau_com_sex_filt$Candidate_gene == 0], tau_com_sex_filt$m_tau[tau_com_sex_filt$Candidate_gene == 1])
+
+
+####Protein-protein interactions
+##Get physical interaction data
+ppi <- read.table("physical_interactions_fb_2018_01.tsv", header = F)
+
+##Extract protein-protein interactions
+ppi <- ppi[ppi$V8 == "protein-protein",] %>% .[,c(1, 3)]
+
+##Count number of ppi's for each gene in dataset
+ppi_summary <- table(ppi$V1) %>% as.data.frame(.) %>% subset(Freq > 0)
+
+##Tidy names
+names(ppi_summary)[1] <- "Gene"
+
+##Merge with gene set
+ppi_gwas <- merge(genes, ppi_summary, by = "Gene")
+
+##Test association
+m1 <- glm(ppi_gwas$Freq ~ ppi_gwas$Candidate_gene, family = "quasipoisson")
+
+m2 <- update(m1, ~.- ppi_gwas$Candidate_gene)
+anova(m1, m2, test = "F")
