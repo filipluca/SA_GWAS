@@ -61,13 +61,11 @@ The 9th text file contains more detailed descriptions of the datafiles shared on
 
 -Partitioning heritability into autosome vs. X
 
--Antagonistic vs. non-antagonistic candidates on autosome vs. X 
-
 -Partitioning heritability into variant effect categories
 
--Antagonistic vs. non-antagonistic candidates among variant effect categories
+-Antagonistic vs. non-antagonistic candidates on autosome vs. X 
 
--Antagonistic genes: GO analysis
+-Antagonistic vs. non-antagonistic candidates among variant effect categories
 
 -Antagonistic genes: sex-biased expression
 
