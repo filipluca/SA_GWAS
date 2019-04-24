@@ -86,15 +86,23 @@ write.table(ld_lhm_sum,paste0(dir,"LD_LHm_Data.txt"),quote=F,row.names=F,sep="\t
 ##############################
 
 ## File contains estimated share of total heritability contributed by a given genomic partition
-## Also includes expected share, CIs, and P value
+## Also includes expected share, CIs, and P value (computed parametrically for XvsA, computed empirically for VEP)
 ## Column 1 = Genomic partition (not named)
-## Column 2 = Share of antagonistic SNP heritability estimated to be explained by given partition
-## Columns 3-11 = TBA
+## Column 2 = Share of antagonistic SNP heritability (i.e. observed h2SNP for a given partition / total h2SNP across all partitions) estimated explained by given partition
+## Column 3 = parametric SD for h2SNP share (only for X vs autosome comparison)
+## Column 4 = parametric Expected h2SNP share (only for X vs autosome comparison)
+## Column 5 = parametric h2SNP enrichment (only for X vs autosome comparison)
+## Column 6 = parametric SD for enrichment in h2SNP (only for X vs autosome comparison)
+## Column 7 = empirical 2.5% quantile of h2SNP share (only for VEP analysis)
+## Column 8 = empirical 97.5% quantile of h2SNP share (only for VEP analysis)
+## Column 9 = empirical mean h2SNP share (only for VEP analysis)
+## Column 10 = p-values for a given partition (parametric for X vs autosome; empirical for VEP)
+## Column 11 = Genomic partition (named)
+
 ## Fig 2 can be reproduced using this dataframe
 ## See Text File #5 on github page for how to generate XvsA.share and allperms.share files
 
 XvsA_a <- read.table(paste0(dir,"XvsA.share"),head=T)
-
 XvsA_a$q025 <- NA
 XvsA_a$q975 <- NA
 XvsA_a$mean <- NA
@@ -106,6 +114,8 @@ allperms <- read.table(paste0(dir,"allperms.share"),head=T)
 allperms <- subset(allperms,Component!="Component")
 allperms$Component <- factor(allperms$Component, levels=c("Share_K1","Share_K2","Share_K3","Share_K4","Share_K5","Share_K6","Share_K7","Share_K8","Share_K9","Share_K10"))
 obs <- read.table(paste0(dir,"category.share"),head=T)
+
+## Get means, quantiles and P-values for each VEP category
 share <- list()
 q025 <- list()
 q975 <- list()
@@ -122,9 +132,17 @@ obs$q025 <- unlist(q025)
 obs$q975 <- unlist(q975)
 obs$mean <- unlist(mean)
 obs$pval <- unlist(pval)
+## Give partitions sensible names
 obs$Component2 <-  factor(c("3' UTR","5' UTR","Downstream","Intergenic","Intron","Missense","Non-coding transcript exon","Splice region","Synonymous","Upstream"))
-obs$Component2<- factor(obs$Component2, levels=c("Upstream","Synonymous","Splice region","Non-coding transcript exon","Missense","Intron","Intergenic","Downstream","5' UTR","3' UTR"))
+## Reorder factors for plot, so that annotations appear in alphabetical order
+obs$Component2 <- factor(obs$Component2, levels=c("Upstream","Synonymous","Splice region","Non-coding transcript exon","Missense","Intron","Intergenic","Downstream","5' UTR","3' UTR"))
+## Remove superfluous information
+obs$SD <- NA
+obs$Expected <- NA
+obs$Enrichment <- NA
+obs$SD.1 <- NA
 
+## Combine XvsA and VEP dataframes
 XvsA_VEP <- rbind(XvsA_a,obs)
 write.table(XvsA_VEP,paste0(dir,"Genome_Partitioning_Data.txt"),quote=F,row.names=F,sep="\t")
 
