@@ -414,3 +414,162 @@ axis(1,at=c(0,0.3,0.4,0.6,0.8,1),cex.axis=1.8)
 abline(v=0.3,lwd=2,lty=3)
 
 ----- /R code -----
+
+################################################
+####Distributions of SNPs and candidate SNPs####
+################################################
+
+##Install Libraries
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("plyr")
+install.packages("reshape")
+install.packages("magrittr")
+install.packages("gridExtra")
+install.packages("grid")
+
+##Load Libraries
+library(ggplot2)
+library(dplyr)
+library(plyr)
+library(reshape)
+library(magrittr)
+library(gridExtra)
+library(grid)
+
+##General theme for plots
+theme_main <- function() {
+  theme_bw() +
+    theme(
+      #panel.grid.major = element_blank(),
+      #panel.grid.minor = element_blank(),
+      axis.text = element_text(size = 25),
+      axis.title = element_text(size = 30),
+      strip.text = element_text(size = 30),
+      legend.text= element_text(size = 25),
+      legend.title = element_text(size = 30),
+      plot.title = element_text(size = 40, face = "bold")
+    )
+}
+
+####Read SNP dataset
+GWAS_SNP <-  read.table("Full_SNP_FILE", header = T)
+
+##Recode non-antagonistic SNPs to 0
+GWAS_SNP$Candidate[is.na(GWAS_SNP$Candidate)] <- 0
+
+
+####Test whether candidate SNPs are significantly clustered along chromosome arms, split X and autosomes
+####Calculate median distances between SNPs for Autosomes and X chromsome
+###get observed distances and put in order
+c2l_cs <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "2L" & GWAS_SNP$Candidate == 1) %>% .[order(.$Basepair),]
+c2r_cs <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "2R" & GWAS_SNP$Candidate == 1) %>% .[order(.$Basepair),]
+c3l_cs <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "3L" & GWAS_SNP$Candidate == 1) %>% .[order(.$Basepair),]
+c3r_cs <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "3R" & GWAS_SNP$Candidate == 1) %>% .[order(.$Basepair),]
+cx_cs <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "X" & GWAS_SNP$Candidate == 1) %>% .[order(.$Basepair),]
+
+c2l_cs$Distance <- 0
+c2l_cs$Distance[-1] <- c2l_cs$Basepair[-1] - c2l_cs$Basepair[-length(c2l_cs$Basepair)];
+
+c2r_cs$Distance <- 0
+c2r_cs$Distance[-1] <- c2r_cs$Basepair[-1] - c2r_cs$Basepair[-length(c2r_cs$Basepair)];
+
+c3l_cs$Distance <- 0
+c3l_cs$Distance[-1] <- c3l_cs$Basepair[-1] - c3l_cs$Basepair[-length(c3l_cs$Basepair)];
+
+c3r_cs$Distance <- 0
+c3r_cs$Distance[-1] <- c3r_cs$Basepair[-1] - c3r_cs$Basepair[-length(c3r_cs$Basepair)];
+
+cx_cs$Distance <- 0
+cx_cs$Distance[-1] <- cx_cs$Basepair[-1] - cx_cs$Basepair[-length(cx_cs$Basepair)];
+
+fulldist_cs <- rbind(c2l_cs, c2r_cs, c3l_cs, c3r_cs, cx_cs)
+
+median(fulldist_cs$Distance[fulldist_cs$Chrom !="X"]) #auto median dist = 147
+
+median(fulldist_cs$Distance[fulldist_cs$Chrom =="X"]) #X median dist = 298
+
+####Perfrom resampling test
+##First calculate median distances across all SNPs
+c2l <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "2L") %>% .[order(.$Basepair),]
+c2r <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "2R") %>% .[order(.$Basepair),]
+c3l <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "3L") %>% .[order(.$Basepair),]
+c3r <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "3R") %>% .[order(.$Basepair),]
+cx <- subset(GWAS_SNP, GWAS_SNP$Chromosome == "X") %>% .[order(.$Basepair),]
+
+c2l$Distance <- 0
+c2l$Distance[-1] <- c2l$Basepair[-1] - c2l$Basepair[-length(c2l$Basepair)];
+
+c2r$Distance <- 0
+c2r$Distance[-1] <- c2r$Basepair[-1] - c2r$Basepair[-length(c2r$Basepair)];
+
+c3l$Distance <- 0
+c3l$Distance[-1] <- c3l$Basepair[-1] - c3l$Basepair[-length(c3l$Basepair)];
+
+c3r$Distance <- 0
+c3r$Distance[-1] <- c3r$Basepair[-1] - c3r$Basepair[-length(c3r$Basepair)];
+
+cx$Distance <- 0
+cx$Distance[-1] <- cx$Basepair[-1] - cx$Basepair[-length(cx$Basepair)];
+
+fulldist <- rbind(c2l, c2r, c3l, c3r, cx)
+
+####Resampling test
+##create a matrix for the results, one column for autosomes, one for the X
+resamp_median_dist <- matrix(ncol = 2, nrow = 1000)
+
+##loop through replicate resamples
+for(i in 1:1000){
+  ## create a zero-length vector for autosomal distances
+  tmp_dists_auto <- vector(mode = "numeric", length = 0)
+  
+  ## cycle through chromosomes
+  for(j in 1:length(c("2L", "2R", "3L", "3R"))){
+    
+    ## sample random positions from that chromosome, getting the same number as that of significant SNPs
+    tmp_positions <- sample(x = fulldist$Basepair[fulldist$Chromosome == c("2L", "2R", "3L", "3R")[j]], size = sum(1 * fulldist$Candidate[fulldist$Chromosome==c("2L", "2R", "3L", "3R")[j]]))
+    
+    ## put positions in increasing order
+    tmp_positions <- tmp_positions[order(tmp_positions)]
+    
+    ## calculate distances from positions and append to autosomal distance vector
+    tmp_dists_auto <- c(tmp_dists_auto, tmp_positions[-1] - tmp_positions[-length(tmp_positions)])}
+  
+  ## sample random positions for the X chromosome (note: this recycles the variable tmp_positions)
+  tmp_positions <- sample(x = fulldist$Basepair[fulldist$Chromosome == "X"], size = sum(1 * fulldist$Candidate[fulldist$Chromosome == "X"]))
+  
+  ## put in order
+  tmp_positions <- tmp_positions[order(tmp_positions)]
+  
+  ## calculate distances for the X
+  tmp_dists_X <- tmp_positions[-1] - tmp_positions[-length(tmp_positions)]
+  
+  ## calculate median distances and store in the corresponding row of the results matrix
+  resamp_median_dist[i,] <- c(median(tmp_dists_auto), median(tmp_dists_X))
+}
+
+##Tidy names
+resamp_median_dist <- as.data.frame(resamp_median_dist)
+names(resamp_median_dist) <- c("Autosomes", "X-Chromosome")
+
+##save output data
+write.table(resamp_median_dist, file = "S5_Data.txt", quote = F, row.names = F)
+
+####Plot results of resampling test - FigS5
+##Use Fig S5 datafile
+resamp_median_dist <- read.table("S5_Data.txt", header = T)
+##restructure data for plotting
+resamp_median_dist_reform <- melt(resamp_median_dist)
+
+##Set observed median for autosomes and X
+vline_data <- data.frame(variable = levels(resamp_median_dist_reform$variable), vline = c(median(fulldist_cs$Distance[fulldist_cs$Chrom != "X"]), median(fulldist_cs$Distance[fulldist_cs$Chrom == "X"])))
+
+##Plot - use FigS5 datafile
+resampled_distance_plot <-
+  ggplot(resamp_median_dist_reform, aes(x= value)) +
+  facet_wrap(~ variable, ncol = 1, scales = "free_y") +
+  geom_density(fill = "lightblue") +
+  theme_main() +
+  geom_vline(data = vline_data, aes(xintercept = vline), linetype = "dashed", colour = "red") +
+  xlab("Median distance between resampled sites") +
+  ylab("Density")
