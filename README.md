@@ -1,7 +1,7 @@
 # Genome-wide sexually antagonistic variants reveal long-standing constraints on sexual dimorphism in fruit flies (2019)
 
 
-#### UPDATE 25.04.19: Cleaning up still required for text files 8-9 (avoid using any zenodo datafiles until new update...)
+#### UPDATE 25.04.19: Cleaning up still required for text file 9 (avoid using any zenodo datafiles until new update...)
 
 
 Welcome!
@@ -47,8 +47,6 @@ The 9th text file contains more detailed descriptions of the datafiles shared on
 
 -QQ-plot
 
--P-value histogram
-
 -FDR estimation
 
 -Permutation-based analysis
@@ -75,9 +73,9 @@ The 9th text file contains more detailed descriptions of the datafiles shared on
 
 #### 6. SNP-based bal sel analyses (Dmel)
 
--Convert Genome Nexus dasta files to vcf format and r6 coordinates
+-Convert Genome Nexus fasta files to vcf format and r6 coordinates
 
--Estimate minor allele frequencies in three populations (DGRP, ZI, SA), including sites that are monomorphic in the population of interest but polymorphic in LHm (MAF=0)
+-Estimate MAFs in three populations (DGRP, ZI, SA)
 
 -Incoporate linked selection / recombination rate estimates
 
@@ -91,7 +89,7 @@ The 9th text file contains more detailed descriptions of the datafiles shared on
 
 #### 7. Window- and LD-based bal sel analyses
 
--Import 'antagonistic windows'
+-Conduct window-based association test
 
 -Calculate Tajima's D values in sliding windows
 
@@ -101,19 +99,19 @@ The 9th text file contains more detailed descriptions of the datafiles shared on
 
 -Estimate LD between pairs of sites in ZI 
 
--Compare pairwise LD between antagonistic sites relative to non-antagonistic sites
+-Compare pairwise LD between antagonistic and non-antagonistic sites in ZI
 
 #### 8. SNP-based bal sel analyses (Dsim, Dyak)
 
 -Import allele frequencies for two D. simulans datasets and one D. yakuba dataset
 
--Comparison of antagonistic and non-antagonistic MAF while correcting for MAF ascertainemnt bias and linked selection
+-Relationship between GWAS effect size and probability that SNP is polymorphic, correcting for MAF ascertainemnt bias and linked selection ('Analysis B')
 
--Relationship between GWAS effect size and probability that SNP is polymorphic, correcting for MAF ascertainemnt bias and linked selection
+-Comparison of antagonistic and non-antagonistic trans-specific status while correcting for MAF ascertainemnt bias and linked selection ('Analysis A')
 
 #### 9. Data files
 
 -Description of summary data files 
 
--Code used to produce summary data files. These data files are sufficient to reproduce the figures presented in the manuscript.
+-Code used to produce summary data files. These data files should be sufficient to reproduce the figures presented in the manuscript
 
