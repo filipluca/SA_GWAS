@@ -1,46 +1,56 @@
+library(PopGenome)
+library(cowplot)
+library(ggplot2)
+
 dir <- "~/Desktop/PloS_Biol_revision/"
 
-
+## Some generic functions
 se <- function(x) sqrt(var(x,na.rm=TRUE)/length(na.omit(x)))
 asNumeric <- function(x) as.numeric(as.character(x))
 factorsNumeric <- function(x) modifyList(x, lapply(x[, sapply(x, is.factor)], asNumeric))
-library(PopGenome)
 
+## Note that the original folder names are often used
+
+###################################
+## PREPROCESSING
+###################################
+
+## Note that some preprocessing steps are not shown for every population and chromosome arms
 
 ####################################################
 ## WINDOW-BASED ASSOCIATION
 ####################################################
 
 ----- R code -----
-#Chunks####
+
+## Import chunks in r5 coordinates (and converted to r6 coordinates)
 chunks <- read.table("~/Documents/data/pop_gen/coord_conversion/window_start_end_r5_r6.txt")
 chunks$Predictor <- paste(chunks$V4,chunks$V5,sep = "_")
 names(chunks) <- c("Chrom.r5","BIN_START.r5","BIN_END.r5","Chrom.r6","BIN_START.r6","BIN_END.r6","Predictor")
 
-#Make chunk file that is suitable for LDAK's gene-based test
+#Write out file that LDAK's gene-based test can read (r6 coordinates)
 chunks_r5 <- chunks[4:7]
 levels(chunks_r5$Chrom.r6) <- 1:5
 chunks_r5 <- chunks_r5[order(chunks_r5$Chrom.r6,chunks_r5$BIN_START.r6),]
 #write.table(chunks_r5[c(4,1,2,3)],"~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/chunks_r5_v2.txt",quote=F,row.names=F,col.names=F)
+
 ----- /R code -----
 
 ## Chunk-based association testing, but using reference genome 5 chunks
-## See R code for details on how to make cbat_r5_v2.txt
 ../ldak5.mac --cut-genes cbat_r5_no_covar --bfile f3c.lhm.snp --genefile chunks_r5_v2.txt --ignore-weights YES --pvalues assoc_mixed_model/mm.pvalues;
 ../ldak5.mac --calc-genes-reml cbat_r5_no_covar --bfile f3c.lhm.snp --ignore-weights YES --power -.25 --pheno pheno.txt --mpheno 6;
 ../ldak5.mac --join-genes-reml cbat_r5_no_covar
 
 ##############################################
-## Tajima's D (and other statistics)
+## SNP-SITES VCF -> "NORMAL" VCF
 ##############################################
+
 ----- R code -----
 
-## Modify VCF for Tajima's D (remove positions where depth<20)
+## Modify VCF for Tajima's D (r5 coordinates + remove positions where depth<20)
 ## Same procedure is applied for each chromosome arm in each population
 
-
-#Import vcf file of interest
-#Do for each chromosome arm
+## Import vcf file of interest
 vcf <- read.table("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr2L/vcf/vcf_without_reference/r5/original/r5.vcf")
 
 #Sanity check
@@ -88,14 +98,20 @@ rm(vcf)
 rm(part1)
 rm(part2)
 rm(part3)
- ----- /R code -----
- 
-## INSERT MISSING UNIX CODE where header.vcf is concatenated with body.vcf
+
+----- /R code -----
+
+## Concatenate 
+grep '^#' r5.vcf > header.vcf; cat header.vcf body.vcf > r5/r5_modified.vcf; rm body.vcf; rm header.vcf;
+
+##############################################
+## Tajima's D (and other statistics)
+##############################################
 
 ----- R code -----
 
 #2L
-#Import vcf, where coordinates have been converted to reference # 5
+#Import vcf, where coordinates have been converted to reference #5
 vcf.2L.DGRP <- readData("/Volumes/Time_Machine_Backups/nexus_originals/dgrp_sequences/dgrp_Chr2L/vcf_snpsites/vcf_without_reference/r5/modified/dp_20/",include.unknown=T,format="VCF",FAST=T)
 sliding.2L.DGRP <- sliding.window.transform(vcf.2L.DGRP,1000,500,type=2)
 sliding.2L.DGRP <- neutrality.stats(sliding.2L.DGRP)
@@ -459,15 +475,438 @@ write.table(stats.X.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5
 
 stats.all.SA <- rbind(stats.2L.SA,stats.2R.SA,stats.3L.SA,stats.3R.SA,stats.X.SA)
 
-#Merge window-based statistics (in r5 coordinates) to r6 coordinates  
+## Merge Tajima's D stats with r6 windows used in LDAK's association test
 stats.all.SA <- merge(chunks[c("Chrom.r5","BIN_START.r5","Chrom.r6","BIN_START.r6")],stats.all.SA,by.x=c("Chrom.r5","BIN_START.r5"),by.y=c("Chrom","Start"),all.x=T)
 #write.table(stats.all.SA,"~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.SA_dp20_r5_and_r6.txt",quote=F,row.names=F)
 stats.all.SA <- read.table("~/Documents/data/pop_gen/polymorphism/sliding_windows/r5/modified/stats.all.SA_dp20_r5_and_r6.txt",head=T)
 
+----- /R code -----
 
-#################################
-## Population differentiation
-#################################
+#########################################################################################
+## Population differentiation: FASTA -> VCF across all DGN populations
+#########################################################################################
+
+## Do this for each chromosome arm, and each population in turn
+cp ~/Downloads/masking/* .;
+perl ibd_mask_seq.pl
+perl admixture_mask_seq.pl
+for file in *.seq; do awk 'BEGIN{print ">'$file'"}1' $file > $file.fas; done;
+rm *.seq;
+mkdir misc;
+mv Table* misc/;
+mv dataslice.pl misc/;
+mv ibd* misc/;
+mv admixture* misc/;
+perl ../misc/breaker.pl;
+
+#2L
+#This extracts line 1, and lines (say) 5002 to 10001 inclusive.
+#Line one contains fasta header, so is important to extract every time, so that snp-sites can work
+for file in *fas1k; do sed -n 1,2501p $file > $file.one; done;
+cat *.one > one.fas;
+snp-sites -v -o one.vcf one.fas;
+for file in *fas1k; do sed -n -e 1p -e 2502,5001p $file > $file.two; done;
+cat *.two > two.fas;
+snp-sites -v -o two.vcf two.fas;
+for file in *fas1k; do sed -n -e 1p -e 5002,7501p $file > $file.three; done;
+cat *.three > three.fas;
+snp-sites -v -o three.vcf three.fas;
+for file in *fas1k; do sed -n -e 1p -e 7502,10001p $file > $file.four; done;
+cat *.four > four.fas;
+snp-sites -v -o four.vcf four.fas;
+for file in *fas1k; do sed -n -e 1p -e 10002,12501p $file > $file.five; done;
+cat *.five > five.fas;
+snp-sites -v -o five.vcf five.fas;
+for file in *fas1k; do sed -n -e 1p -e 12502,15001p $file > $file.six; done;
+cat *.six > six.fas;
+snp-sites -v -o six.vcf six.fas;
+for file in *fas1k; do sed -n -e 1p -e 15002,17501p $file > $file.seven; done;
+cat *.seven > seven.fas;
+snp-sites -v -o seven.vcf seven.fas;
+for file in *fas1k; do sed -n -e 1p -e 17502,20001p $file > $file.eight; done;
+cat *.eight > eight.fas;
+snp-sites -v -o eight.vcf eight.fas;
+for file in *fas1k; do sed -n -e 1p -e 20002,22501p $file > $file.nine; done;
+cat *.nine > nine.fas;
+snp-sites -v -o nine.vcf nine.fas;
+for file in *fas1k; do sed -n -e 1p -e 22502,25001p $file > $file.ten; done;
+cat *.ten > ten.fas;
+snp-sites -v -o ten.vcf ten.fas;
+#Make single vcf for the chromosome arm
+#Extract header
+grep '^#' one.vcf > header.vcf;
+#Remove headers from the rest
+grep -v '^#' one.vcf > one.body.vcf;
+grep -v '^#' two.vcf > two.body.vcf;
+grep -v '^#' three.vcf > three.body.vcf;
+grep -v '^#' four.vcf > four.body.vcf;
+grep -v '^#' five.vcf > five.body.vcf;
+grep -v '^#' six.vcf > six.body.vcf;
+grep -v '^#' seven.vcf > seven.body.vcf;
+grep -v '^#' eight.vcf > eight.body.vcf;
+grep -v '^#' nine.vcf > nine.body.vcf;
+grep -v '^#' ten.vcf > ten.body.vcf;
+#Add the appropriate constant to each vcf > 1
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 2500000; print}' two.body.vcf > two2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 5000000; print}' three.body.vcf > three2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 7500000; print}' four.body.vcf > four2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 10000000; print}' five.body.vcf > five2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 12500000; print}' six.body.vcf > six2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 15000000; print}' seven.body.vcf > seven2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 17500000; print}' eight.body.vcf > eight2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 20000000; print}' nine.body.vcf > nine2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 22500000; print}' ten.body.vcf > ten2.body.vcf
+#Concatenate header + bodies of remaining vcfs in order
+cat header.vcf one.body.vcf two2.body.vcf three2.body.vcf four2.body.vcf five2.body.vcf six2.body.vcf seven2.body.vcf eight2.body.vcf nine2.body.vcf ten2.body.vcf > 2L.vcf;
+rm *.body.vcf;
+rm *.one;
+rm *.two;
+rm *.three;
+rm *.four;
+rm *.five;
+rm *.six;
+rm *.seven;
+rm *.eight;
+rm *.nine;
+rm *.ten;
+
+#2R
+cd ../2R/;
+#This extracts line 1, and lines (say) 5002 to 10001 inclusive.
+#Line one contains fasta header, so is important to extract every time, so that snp-sites can work
+for file in *fas1k; do sed -n 1,2501p $file > $file.one; done;
+cat *.one > one.fas;
+snp-sites -v -o one.vcf one.fas;
+for file in *fas1k; do sed -n -e 1p -e 2502,5001p $file > $file.two; done;
+cat *.two > two.fas;
+snp-sites -v -o two.vcf two.fas;
+for file in *fas1k; do sed -n -e 1p -e 5002,7501p $file > $file.three; done;
+cat *.three > three.fas;
+snp-sites -v -o three.vcf three.fas;
+for file in *fas1k; do sed -n -e 1p -e 7502,10001p $file > $file.four; done;
+cat *.four > four.fas;
+snp-sites -v -o four.vcf four.fas;
+for file in *fas1k; do sed -n -e 1p -e 10002,12501p $file > $file.five; done;
+cat *.five > five.fas;
+snp-sites -v -o five.vcf five.fas;
+for file in *fas1k; do sed -n -e 1p -e 12502,15001p $file > $file.six; done;
+cat *.six > six.fas;
+snp-sites -v -o six.vcf six.fas;
+for file in *fas1k; do sed -n -e 1p -e 15002,17501p $file > $file.seven; done;
+cat *.seven > seven.fas;
+snp-sites -v -o seven.vcf seven.fas;
+for file in *fas1k; do sed -n -e 1p -e 17502,20001p $file > $file.eight; done;
+cat *.eight > eight.fas;
+snp-sites -v -o eight.vcf eight.fas;
+for file in *fas1k; do sed -n -e 1p -e 20002,22501p $file > $file.nine; done;
+cat *.nine > nine.fas;
+snp-sites -v -o nine.vcf nine.fas;
+#Make single vcf for the chromosome arm
+#Extract header
+grep '^#' one.vcf > header.vcf;
+#Remove headers from the rest
+grep -v '^#' one.vcf > one.body.vcf;
+grep -v '^#' two.vcf > two.body.vcf;
+grep -v '^#' three.vcf > three.body.vcf;
+grep -v '^#' four.vcf > four.body.vcf;
+grep -v '^#' five.vcf > five.body.vcf;
+grep -v '^#' six.vcf > six.body.vcf;
+grep -v '^#' seven.vcf > seven.body.vcf;
+grep -v '^#' eight.vcf > eight.body.vcf;
+grep -v '^#' nine.vcf > nine.body.vcf;
+#Add the appropriate constant to each vcf > 1
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 2500000; print}' two.body.vcf > two2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 5000000; print}' three.body.vcf > three2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 7500000; print}' four.body.vcf > four2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 10000000; print}' five.body.vcf > five2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 12500000; print}' six.body.vcf > six2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 15000000; print}' seven.body.vcf > seven2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 17500000; print}' eight.body.vcf > eight2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 20000000; print}' nine.body.vcf > nine2.body.vcf;
+#Concatenate header + bodies of remaining vcfs in order
+cat header.vcf one.body.vcf two2.body.vcf three2.body.vcf four2.body.vcf five2.body.vcf six2.body.vcf seven2.body.vcf eight2.body.vcf nine2.body.vcf > 2R.vcf;
+rm *.body.vcf;
+rm *.one;
+rm *.two;
+rm *.three;
+rm *.four;
+rm *.five;
+rm *.six;
+rm *.seven;
+rm *.eight;
+rm *.nine;
+
+#3L
+cd ../3L/;
+for file in *fas1k; do sed -n 1,2501p $file > $file.one; done;
+cat *.one > one.fas;
+snp-sites -v -o one.vcf one.fas;
+for file in *fas1k; do sed -n -e 1p -e 2502,5001p $file > $file.two; done;
+cat *.two > two.fas;
+snp-sites -v -o two.vcf two.fas;
+for file in *fas1k; do sed -n -e 1p -e 5002,7501p $file > $file.three; done;
+cat *.three > three.fas;
+snp-sites -v -o three.vcf three.fas;
+for file in *fas1k; do sed -n -e 1p -e 7502,10001p $file > $file.four; done;
+cat *.four > four.fas;
+snp-sites -v -o four.vcf four.fas;
+for file in *fas1k; do sed -n -e 1p -e 10002,12501p $file > $file.five; done;
+cat *.five > five.fas;
+snp-sites -v -o five.vcf five.fas;
+for file in *fas1k; do sed -n -e 1p -e 12502,15001p $file > $file.six; done;
+cat *.six > six.fas;
+snp-sites -v -o six.vcf six.fas;
+for file in *fas1k; do sed -n -e 1p -e 15002,17501p $file > $file.seven; done;
+cat *.seven > seven.fas;
+snp-sites -v -o seven.vcf seven.fas;
+for file in *fas1k; do sed -n -e 1p -e 17502,20001p $file > $file.eight; done;
+cat *.eight > eight.fas;
+snp-sites -v -o eight.vcf eight.fas;
+for file in *fas1k; do sed -n -e 1p -e 20002,22501p $file > $file.nine; done;
+cat *.nine > nine.fas;
+snp-sites -v -o nine.vcf nine.fas;
+for file in *fas1k; do sed -n -e 1p -e 22502,25001p $file > $file.ten; done;
+cat *.ten > ten.fas;
+snp-sites -v -o ten.vcf ten.fas;
+#Make single vcf for the chromosome arm
+#Extract header
+grep '^#' one.vcf > header.vcf;
+#Remove headers from the rest
+grep -v '^#' one.vcf > one.body.vcf;
+grep -v '^#' two.vcf > two.body.vcf;
+grep -v '^#' three.vcf > three.body.vcf;
+grep -v '^#' four.vcf > four.body.vcf;
+grep -v '^#' five.vcf > five.body.vcf;
+grep -v '^#' six.vcf > six.body.vcf;
+grep -v '^#' seven.vcf > seven.body.vcf;
+grep -v '^#' eight.vcf > eight.body.vcf;
+grep -v '^#' nine.vcf > nine.body.vcf;
+grep -v '^#' ten.vcf > ten.body.vcf;
+#Add the appropriate constant to each vcf > 1
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 2500000; print}' two.body.vcf > two2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 5000000; print}' three.body.vcf > three2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 7500000; print}' four.body.vcf > four2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 10000000; print}' five.body.vcf > five2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 12500000; print}' six.body.vcf > six2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 15000000; print}' seven.body.vcf > seven2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 17500000; print}' eight.body.vcf > eight2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 20000000; print}' nine.body.vcf > nine2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 22500000; print}' ten.body.vcf > ten2.body.vcf;
+#Concatenate header + bodies of remaining vcfs in order
+cat header.vcf one.body.vcf two2.body.vcf three2.body.vcf four2.body.vcf five2.body.vcf six2.body.vcf seven2.body.vcf eight2.body.vcf nine2.body.vcf ten2.body.vcf > 3L.vcf;
+rm *.body.vcf;
+rm *.one;
+rm *.two;
+rm *.three;
+rm *.four;
+rm *.five;
+rm *.six;
+rm *.seven;
+rm *.eight;
+rm *.nine;
+rm *.ten;
+
+#3R
+cd ../3R/;
+#This extracts line 1, and lines (say) 5002 to 10001 inclusive.
+#Line one contains fasta header, so is important to extract every time, so that snp-sites can work
+for file in *fas1k; do sed -n 1,2501p $file > $file.one; done;
+cat *.one > one.fas;
+snp-sites -v -o one.vcf one.fas;
+for file in *fas1k; do sed -n -e 1p -e 2502,5001p $file > $file.two; done;
+cat *.two > two.fas;
+snp-sites -v -o two.vcf two.fas;
+for file in *fas1k; do sed -n -e 1p -e 5002,7501p $file > $file.three; done;
+cat *.three > three.fas;
+snp-sites -v -o three.vcf three.fas;
+for file in *fas1k; do sed -n -e 1p -e 7502,10001p $file > $file.four; done;
+cat *.four > four.fas;
+snp-sites -v -o four.vcf four.fas;
+for file in *fas1k; do sed -n -e 1p -e 10002,12501p $file > $file.five; done;
+cat *.five > five.fas;
+snp-sites -v -o five.vcf five.fas;
+for file in *fas1k; do sed -n -e 1p -e 12502,15001p $file > $file.six; done;
+cat *.six > six.fas;
+snp-sites -v -o six.vcf six.fas;
+for file in *fas1k; do sed -n -e 1p -e 15002,17501p $file > $file.seven; done;
+cat *.seven > seven.fas;
+snp-sites -v -o seven.vcf seven.fas;
+for file in *fas1k; do sed -n -e 1p -e 17502,20001p $file > $file.eight; done;
+cat *.eight > eight.fas;
+snp-sites -v -o eight.vcf eight.fas;
+for file in *fas1k; do sed -n -e 1p -e 20002,22501p $file > $file.nine; done;
+cat *.nine > nine.fas;
+snp-sites -v -o nine.vcf nine.fas;
+for file in *fas1k; do sed -n -e 1p -e 22502,25001p $file > $file.ten; done;
+cat *.ten > ten.fas;
+snp-sites -v -o ten.vcf ten.fas;
+for file in *fas1k; do sed -n -e 1p -e 25002,27501p $file > $file.eleven; done;
+cat *.eleven > eleven.fas;
+snp-sites -v -o eleven.vcf eleven.fas;
+for file in *fas1k; do sed -n -e 1p -e 27502,30001p $file > $file.twelve; done;
+cat *.twelve > twelve.fas;
+snp-sites -v -o twelve.vcf twelve.fas;
+#Make single vcf for the chromosome arm
+#Extract header
+grep '^#' one.vcf > header.vcf;
+#Remove headers from the rest
+grep -v '^#' one.vcf > one.body.vcf;
+grep -v '^#' two.vcf > two.body.vcf;
+grep -v '^#' three.vcf > three.body.vcf;
+grep -v '^#' four.vcf > four.body.vcf;
+grep -v '^#' five.vcf > five.body.vcf;
+grep -v '^#' six.vcf > six.body.vcf;
+grep -v '^#' seven.vcf > seven.body.vcf;
+grep -v '^#' eight.vcf > eight.body.vcf;
+grep -v '^#' nine.vcf > nine.body.vcf;
+grep -v '^#' ten.vcf > ten.body.vcf;
+grep -v '^#' eleven.vcf > eleven.body.vcf;
+grep -v '^#' twelve.vcf > twelve.body.vcf;
+#Add the appropriate constant to each vcf > 1
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 2500000; print}' two.body.vcf > two2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 5000000; print}' three.body.vcf > three2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 7500000; print}' four.body.vcf > four2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 10000000; print}' five.body.vcf > five2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 12500000; print}' six.body.vcf > six2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 15000000; print}' seven.body.vcf > seven2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 17500000; print}' eight.body.vcf > eight2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 20000000; print}' nine.body.vcf > nine2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 22500000; print}' ten.body.vcf > ten2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 25000000; print}' eleven.body.vcf > eleven2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 27500000; print}' twelve.body.vcf > twelve2.body.vcf;
+#Concatenate header + bodies of remaining vcfs in order
+cat header.vcf one.body.vcf two2.body.vcf three2.body.vcf four2.body.vcf five2.body.vcf six2.body.vcf seven2.body.vcf eight2.body.vcf nine2.body.vcf ten2.body.vcf eleven2.body.vcf twelve2.body.vcf > 3R.vcf;
+rm *.body.vcf;
+rm *.one;
+rm *.two;
+rm *.three;
+rm *.four;
+rm *.five;
+rm *.six;
+rm *.seven;
+rm *.eight;
+rm *.nine;
+rm *.ten;
+rm *.eleven;
+rm *.twelve;
+
+#X
+cd ../X/;
+#This extracts line 1, and lines (say) 5002 to 10001 inclusive.
+#Line one contains fasta header, so is important to extract every time, so that snp-sites can work
+rm SD101N_ChrX.seq.fas1k*;
+for file in *fas1k; do sed -n 1,2501p $file > $file.one; done;
+cat *.one > one.fas;
+snp-sites -v -o one.vcf one.fas;
+for file in *fas1k; do sed -n -e 1p -e 2502,5001p $file > $file.two; done;
+cat *.two > two.fas;
+snp-sites -v -o two.vcf two.fas;
+for file in *fas1k; do sed -n -e 1p -e 5002,7501p $file > $file.three; done;
+cat *.three > three.fas;
+snp-sites -v -o three.vcf three.fas;
+for file in *fas1k; do sed -n -e 1p -e 7502,10001p $file > $file.four; done;
+cat *.four > four.fas;
+snp-sites -v -o four.vcf four.fas;
+for file in *fas1k; do sed -n -e 1p -e 10002,12501p $file > $file.five; done;
+cat *.five > five.fas;
+snp-sites -v -o five.vcf five.fas;
+for file in *fas1k; do sed -n -e 1p -e 12502,15001p $file > $file.six; done;
+cat *.six > six.fas;
+snp-sites -v -o six.vcf six.fas;
+for file in *fas1k; do sed -n -e 1p -e 15002,17501p $file > $file.seven; done;
+cat *.seven > seven.fas;
+snp-sites -v -o seven.vcf seven.fas;
+for file in *fas1k; do sed -n -e 1p -e 17502,20001p $file > $file.eight; done;
+cat *.eight > eight.fas;
+snp-sites -v -o eight.vcf eight.fas;
+for file in *fas1k; do sed -n -e 1p -e 20002,22501p $file > $file.nine; done;
+cat *.nine > nine.fas;
+snp-sites -v -o nine.vcf nine.fas;
+#Make single vcf for the chromosome arm
+#Extract header
+grep '^#' one.vcf > header.vcf;
+#Remove headers from the rest
+grep -v '^#' one.vcf > one.body.vcf;
+grep -v '^#' two.vcf > two.body.vcf;
+grep -v '^#' three.vcf > three.body.vcf;
+grep -v '^#' four.vcf > four.body.vcf;
+grep -v '^#' five.vcf > five.body.vcf;
+grep -v '^#' six.vcf > six.body.vcf;
+grep -v '^#' seven.vcf > seven.body.vcf;
+grep -v '^#' eight.vcf > eight.body.vcf;
+grep -v '^#' nine.vcf > nine.body.vcf;
+#Add the appropriate constant to each vcf > 1
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 2500000; print}' two.body.vcf > two2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 5000000; print}' three.body.vcf > three2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 7500000; print}' four.body.vcf > four2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 10000000; print}' five.body.vcf > five2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 12500000; print}' six.body.vcf > six2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 15000000; print}' seven.body.vcf > seven2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 17500000; print}' eight.body.vcf > eight2.body.vcf;
+awk 'BEGIN { OFS = "\t" } {$2 = $2 + 20000000; print}' nine.body.vcf > nine2.body.vcf;
+#Concatenate header + bodies of remaining vcfs in order
+cat header.vcf one.body.vcf two2.body.vcf three2.body.vcf four2.body.vcf five2.body.vcf six2.body.vcf seven2.body.vcf eight2.body.vcf nine2.body.vcf > X.vcf;
+rm *.body.vcf;
+rm *.one;
+rm *.two;
+rm *.three;
+rm *.four;
+rm *.five;
+rm *.six;
+rm *.seven;
+rm *.eight;
+rm *.nine;
+
+#2L, r5
+grep '^#' 2L.vcf > header.vcf;
+mkdir p1;
+head -1500000 2L.vcf > p1/2L_p1.vcf;
+mkdir p2;
+tail -n +1490000 2R.vcf p2/body.vcf;
+cat header.vcf p2/body.vcf > p2/2L_p2.vcf;
+#See R code
+
+#2R, r5
+grep '^#' 2R.vcf > header.vcf;
+mkdir p1;
+head -1500000 2R.vcf > p1/2R_p1.vcf;
+mkdir p2;
+tail -n +1490000 2R.vcf > p2/body.vcf;
+cat header.vcf p2/body.vcf > p2/2R_p2.vcf;
+rm p2/body.vcf; rm header.vcf
+
+#3L, r5
+grep '^#' 3L.vcf > header.vcf;
+mkdir p1;
+head -1500000 3L.vcf > p1/3L_p1.vcf;
+mkdir p2;
+tail -n +1490000 3L.vcf > p2/body.vcf;
+cat header.vcf p2/body.vcf > p2/3L_p2.vcf;
+rm p2/body.vcf; rm header.vcf
+
+#3R, r5
+grep '^#' 3R.vcf > header.vcf;
+mkdir p1;
+head -1500000 3R.vcf > p1/3R_p1.vcf;
+mkdir p2;
+tail -n +1490000 3R.vcf > p2/body.vcf;
+cat header.vcf p2/body.vcf > p2/3R_p2.vcf;
+rm p2/body.vcf; rm header.vcf
+
+#X, r5
+grep '^#' X.vcf > header.vcf;
+mkdir p1;
+head -1500000 X.vcf > p1/X_p1.vcf;
+mkdir p2;
+tail -n +1490000 X.vcf > p2/body.vcf;
+cat header.vcf p2/body.vcf > p2/X_p2.vcf;
+rm p2/body.vcf; rm header.vcf;
+
+#########################################################################################
+## Population differentiation: calculate Fst in PopGenome
+#########################################################################################
+
+----- R code -----
 
 ## Import population vcfs for each chromosome arm (these have been further split)
 ## Calculate Fst for each chromosome arm
@@ -583,8 +1022,7 @@ tail(fst.stats.p2)
 write.table(fst.stats.p2,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_X.p2.txt",quote=F,row.names=F)
 
 
-
-#Merge fst stats for all chromosome arms
+## Merge fst stats for all chromosome arms
 #2L
 fst.stats.2L.p1 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2L.p1.txt",head=T)
 fst.stats.2L.p2 <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_2L.p2.txt",head=T)
@@ -620,14 +1058,18 @@ fst.stats.X <- rbind(fst.stats.X.p1[1:20820,],fst.stats.X.p2[20821:nrow(fst.stat
 fst.stats.X$Chrom <- "X"
 write.table(fst.stats.X,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_X.txt",quote=F,row.names=F)
 
-
 fst.stats <- rbind(fst.stats.2L,fst.stats.2R,fst.stats.3L,fst.stats.3R,fst.stats.X)
 names(fst.stats)[c(1,17)] <- c("BIN_START.r5","Chrom.r5")
 
+## Merge fst stats with r6 windows used in LDAK's association test
 fst.stats <- merge(fst.stats,chunks[,c("Chrom.r5","BIN_START.r5","Chrom.r6","BIN_START.r6")],by=c("Chrom.r5","BIN_START.r5"),all.y = T)
 write.table(fst.stats,"~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_all_r5_and_r6.txt",quote=F,row.names=F)
 fst.stats <- read.table("~/Documents/data/pop_gen/pop_diff/nexus_fst_stats_all_r5_and_r6.txt",head=T)
 
+
+###################################
+## ANALYSIS
+###################################
 
 ###############################################
 ## Antagonistic vs. non-antagonistic
@@ -638,9 +1080,10 @@ chunks <- read.table(paste0(dir,"window_start_end_r5_r6.txt"))
 chunks$Predictor <- paste(chunks$V4,chunks$V5,sep = "_")
 names(chunks) <- c("Chrom.r5","BIN_START.r5","BIN_END.r5","Chrom.r6","BIN_START.r6","BIN_END.r6","Predictor")
 
-## Import linked selection####
+## Import linked selection ####
 ls <- read.table(paste0(dir,"LS_map_all_chrom_r5_and_r6.txt"),header = T)
-## Import recombination rate
+
+## Import recombination rate ####
 rr <- read.table(paste0(dir,"recom_all_chrom_r5_and_r6.txt"),head=T)
 
 ## Import Tajima's D (and other statistics) for DGRP####
@@ -670,7 +1113,7 @@ cbat$Candidate <- ifelse(cbat$fdr<0.1,1,0)
 names(cbat)[23:25] <- c("Fst_RAL.ZI","Fst_SA.ZI","Fst_RAL.SA")
 cbat <- cbat[order(cbat$Chrom.r6,cbat$BIN_START.r6),]
 
-## GLMs (for Tajima's D)####
+## GLMs for Tajima's D####
 cbat$Tajima.D_DGRP.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate),],Tajima.D_DGRP~LS)$residuals
 cbat$Tajima.D_DGRP.resid[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Tajima.D_DGRP~RR)$residuals
 cbat$Tajima.D_DPGP3.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate),],Tajima.D_DPGP3~LS)$residuals
@@ -682,7 +1125,7 @@ summary(aov(data=cbat,Tajima.D_DGRP.resid~Candidate))
 summary(aov(data=cbat,Tajima.D_DPGP3.resid~Candidate))
 summary(aov(data=cbat,Tajima.D_SA.resid~Candidate))
 
-## Wilcox test (for Fst)####
+## Wilcox test for Fst####
 cbat$Fst_RAL.SA.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate),],Fst_RAL.SA~LS)$residuals
 cbat$Fst_RAL.SA.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Fst_RAL.SA~RR)$residuals
 cbat$Fst_RAL.ZI.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate),],Fst_RAL.ZI~LS)$residuals
@@ -693,6 +1136,7 @@ cbat$Fst_SA.ZI.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Cand
 wilcox.test(cbat$Fst_RAL.SA.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
 wilcox.test(cbat$Fst_RAL.ZI.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
 wilcox.test(cbat$Fst_SA.ZI.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.1])
+
 ----- /R code-----
 
 ##################
@@ -700,28 +1144,56 @@ wilcox.test(cbat$Fst_SA.ZI.resid[cbat$fdr<0.1],cbat$Fst_SA.ZI.resid[cbat$fdr>=0.
 ##################
 
 ## DPGP3
-## Repeat for each relevant chromosome arm
-## Convert VCF to BED
+## Convert VCF (r6 coordinates) to BED 
+## Repeat for each chromosome arm
 ~/Downloads/plink_mac/plink --vcf r6_modified_no_dp_filter.vcf --make-bed --out r6_modified_no_dp_filter
-
------ R code -----
-## Rename bim file predictors to Chrom_Pos
-#2L
-bim <- read.table('/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim')
-bim$V1 <- 1
-bim$V2 <- paste(bim$V1,bim$V4,sep="_")
-write.table(bim,'/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim',quote=F,row.names=F,col.names=F,sep="\t")
------ /R code -----
 
 ## Extract SNPs that are present in LHM only
 plink --noweb --bfile r6_modified_no_dp_filter --extract ~/Documents/data/GWAS_data/gwas/callrate95_no_outlier/GWAS_predictors.txt --make-bed --out r6_modified_no_dp_filter
-## LD values from BED file
+
+----- R code -----
+
+## Rename bim file predictors to Chrom_Pos
+#2L
+  bim <- read.table('/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim')
+bim$V1 <- 1
+bim$V2 <- paste(bim$V1,bim$V4,sep="_")
+write.table(bim,'/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim',quote=F,row.names=F,col.names=F,sep="\t")
+
+#2L
+bim <- read.table('/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim')
+bim$V1 <- 2
+bim$V2 <- paste(bim$V1,bim$V4,sep="_")
+write.table(bim,'/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/2R/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim',quote=F,row.names=F,col.names=F,sep="\t")
+
+#3L
+bim <- read.table('/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/3L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim')
+bim$V1 <- 3
+bim$V2 <- paste(bim$V1,bim$V4,sep="_")
+write.table(bim,'/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/3L/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim',quote=F,row.names=F,col.names=F,sep="\t")
+
+#3R
+bim <- read.table('/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/3R/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim')
+bim$V1 <- 4
+bim$V2 <- paste(bim$V1,bim$V4,sep="_")
+write.table(bim,'/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/3R/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim',quote=F,row.names=F,col.names=F,sep="\t")
+
+#X
+bim <- read.table('/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/X/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim')
+bim$V1 <- 5
+bim$V2 <- paste(bim$V1,bim$V4,sep="_")
+write.table(bim,'/Volumes/Time_Machine_Backups/nexus_originals/dpgp3_sequences/X/vcf/vcf_without_reference/r6/modified/r6_modified_no_dp_filter.bim',quote=F,row.names=F,col.names=F,sep="\t")
+
+----- /R code -----
+
+## LD values from BED file; repeat for each chromosome arm
 plink --noweb --r2 --ld-window-r2 0 --ld-window-kb 10 --bfile r6_modified_no_dp_filter --out ld_dpgp3_2L
 
 ## Concatenate output from each chromosome arm
 
 ----- R code -----
-#LD analysis, using LD values from DPGP3
+
+## LD analysis
 Cand <- subset(assoc,fdr<0.3)$Predictor
 
 ## Import LD info, keeping only SNPs within 1Kb
@@ -735,18 +1207,17 @@ ld_dpgp3$SNP_A_Type <- ifelse(ld_dpgp3$SNP_A %in% Cand,"Cand","NonCand")
 ld_dpgp3$SNP_B_Type <- ifelse(ld_dpgp3$SNP_B %in% Cand,"Cand","NonCand")
 ld_dpgp3$Type <- paste(ld_dpgp3$SNP_A_Type,ld_dpgp3$SNP_B_Type,sep="_")
 ld_dpgp3$Type[ld_dpgp3$Type=="NonCand_Cand"] <- "Cand_NonCand"
-
 ld_dpgp3$R2 <- as.numeric(as.character(ld_dpgp3$R2))
+
 ## Regress out distance
 ld_dpgp3$R2.resid <- glm(data=ld_dpgp3,R2~log(Distance))$residuals
 
+## Wilcox tests
 wilcox.test(ld_dpgp3$R2.resid[ld_dpgp3$Type=="NonCand_NonCand"],ld_dpgp3$R2.resid[ld_dpgp3$Type=="Cand_Cand"])
 wilcox.test(ld_dpgp3$R2.resid[ld_dpgp3$Type=="Cand_NonCand"],ld_dpgp3$R2.resid[ld_dpgp3$Type=="Cand_Cand"])
------ /R code -----
-
 
 ####################################
-## Plot Taj D, Fst and LD
+## Plot Taj. D, Fst and LD
 ####################################
 
 ## Tajima's D figure
@@ -764,7 +1235,7 @@ cbat.tajd.3pops <- rbind(cbat.dgrp,cbat.dpgp3,cbat.sa)
 cbat.tajd.3pops$Pop <- as.factor(cbat.tajd.3pops$Pop)
 cbat.tajd.3pops$Pop <- factor(cbat.tajd.3pops$Pop, levels=c("DGRP","ZI","SA"))
 
-ggplot(cbat.tajd.3pops,aes(y=Tajima.D.resid,x=factor(Candidate)))+
+fig5a <- ggplot(cbat.tajd.3pops,aes(y=Tajima.D.resid,x=factor(Candidate)))+
   theme_bw()+
   stat_summary(fun.y=base::mean,position=position_dodge(),geom="bar",colour="black",fill=rep(c("darkgrey","dodgerblue4"),3),alpha=0.8,size=0.7)+
   stat_summary(fun.data=mean_se,geom="errorbar",position=position_dodge(0.9),width=0.2)+
@@ -812,7 +1283,7 @@ fig5c <- ggplot(ld_dpgp3_sum,aes(y=R2,x=Distance_Bin*25,col=Type,linetype=Type))
   geom_point(size=2)
 fig5c
 
-## All three figure together
-library(cowplot)
+## All three figures together
 plot_grid(fig5a,fig5b,fig5c,ncol=3,align='h',labels=c("A","B","C"),rel_widths = c(3, 3, 3),axis='l',label_size=25,scale=0.9)
+
 ----- /R code -----
