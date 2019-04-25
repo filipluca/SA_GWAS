@@ -1,17 +1,69 @@
 
 dir <- "~/Desktop/PloS_Biology_revision/"
 
+install.packages("matrixStats")
 library(matrixStats)
+install.packages("MASS")
 library(MASS)
+install.packages("cowplot")
 library(cowplot)
+install.packages("Hmisc")
+library(Hmisc)
+install.packages("Rmisc")
+library(Rmisc)
+
+##########################################
+## GWAS positions + LS/RR info
+##########################################
+
+----- R code -----
+
+## LS / RR info ####
+GWAS.pos <- read.table(paste0(dir,"GWAS_positions.r5.txt"))
+names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
+GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
+levels(GWAS.pos$Chrom_plink) <- 1:5
+GWAS.pos$Predictor <- paste(GWAS.pos$Chrom_plink,GWAS.pos$Pos.r6,sep="_")
+
+## Linked selection table
+ls <- read.table("Desktop/PloS_Biol_revision/LS_map_all_chrom_r5_and_r6.txt",header = T)
+
+## Recombination rate table
+rr <- read.table("Desktop/PloS_Biol_revision/recom_all_chrom_r5_and_r6.txt",head=T)
+
+## Link window-based measures with SNP positions
+GWAS.pos$BIN_START <- cut(GWAS.pos$Pos.r5,breaks=levels(factor(ls$BIN_START)),include.lowest = T,labels=F,right=F)
+GWAS.pos$BIN_START <- GWAS.pos$BIN_START-1
+GWAS.pos$BIN_START <- GWAS.pos$BIN_START*1000
+GWAS.pos$BIN_START<- GWAS.pos$BIN_START+1
+names(GWAS.pos)[1:2] <- c("Chrom","Pos")
+GWAS.pos <- Reduce(function(...) merge(...,by=c("Chrom","BIN_START"),all.x=T),list(GWAS.pos,ls[c("Chrom","BIN_START","LS")],rr[c("Chrom","BIN_START","RR")]))
+names(GWAS.pos)[c(1,3)] <- c("Chrom.r5","Pos.r5")
+
+----- /R code -----
 
 ##########################################
 ## D. simulans (Signor dataset)
 ##########################################
 
-# INSERT UNIX CODE HERE: TBD####
+##Simulans VCF downloaded from https://zenodo.org/record/154261#.WqD0zRPFIUE###
+## Filter Simulans ###
+#<20% missing data allowed (call rate > 80%) and minimum depth 10
+vcftools --vcf simulans_multisamp_all_chr.vcf --minDP 10 --max-missing 0.8 --chr 2L --chr 2R --chr 3L --chr 3R --chr X --chr M --chr 4 --recode --recode-INFO-all --out f2.simulans
+mv f2.simulans.recode.vcf f2.simulans.vcf
+
+#Keep only bi-allelic
+vcftools --vcf f2.simulans.vcf --min-alleles 2 --max-alleles 2 --recode --out f3.simulans
+mv f3.simulans.recode.vcf f3.simulans.vcf
+
+#Get summary data for vcf
+vcftools --vcf f3.simulans.vcf --freq --recode --out f3.simulans
+
+#Convert from simulans to melanogaster using UCSC liftover file
+./liftOver ~/Documents/data/pop_gen/coord_conversion/signor_sim_original_r2.bed droSim2ToDm3.over.chain signor_sim_original_mel_r5.bed unMapped 
 
 ----- R code -----
+
 ## Allele frequencies
 sim.frq <- read.table(paste0(dir,"f3.simulans.frq"),head=T,row.names = NULL)
 names(sim.frq) <- c("Chrom","Pos","N_alleles","N_chrom","A1","A2")
@@ -64,10 +116,22 @@ names(sim.frq3)[5:11] <- c("N_alleles_Dsim_Signor","N_chrom_Dsim_Signor","A1_Dsi
 ## D. simulans (Rogers dataset)
 ##########################################
 
-# INSERT UNIX CODE HERE; TBD
+## Align D. melanogaster and D. simulans genome
+#Use WYSIWYG MAUVE, using dmel-short.fasta, dsim-short.fasta and individuals 1 to X (in fasta file format) as input, using default settings
+
+## Aligned fasta -> aligned dataframe (apply this for each subset of individuals) 
+perl ~/Documents/work/tools/popoolation_1.2.2/mauve-parser.pl --ref-input dmel-short.fasta --input dmel-dsim-1to3 --output multi-align-dmel-anchored-1to3 --crosscheck
+
+#Cbind genomes 1-20, while keeping only GWAS polymorphic positions 
+awk 'NR==FNR{a[$1,$2]=$3$4$5$6$7;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-1to3 GWAS_positions.r5.txt > 1to3.txt
+awk 'NR==FNR{a[$1,$2]=$5$6$7;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-4to6 GWAS_positions.r5.txt > 4to6.txt
+awk 'NR==FNR{a[$1,$2]=$5$6$7$8;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-7to10 GWAS_positions.r5.txt > 7to10.txt
+awk 'NR==FNR{a[$1,$2]=$5$6$7$8$9;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-11to15 GWAS_positions.r5.txt > 11to15.txt
+awk 'NR==FNR{a[$1,$2]=$5$6$7$8$9;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-16to20 GWAS_positions.r5.txt > 16to20.txt
 
 ----- R code -----
-#Import genomic information from each separate subset of 20 genomes
+
+## Import genomic information from each separate subset of 20 genomes
 p1 <- read.table("Desktop/PloS_Biol_revision/simulans/1to3.txt")
 names(p1)[3] <- "p1"
 p2 <- read.table("Desktop/PloS_Biol_revision/simulans/4to6.txt")
@@ -79,10 +143,10 @@ names(p4)[3] <- "p4"
 p5 <- read.table("Desktop/PloS_Biol_revision/simulans/16to20.txt")
 names(p5)[3] <- "p5"
 
-#Combine genomic data from all 20 D. simulans genomes
+## Combine genomic data from all 20 D. simulans genomes
 sim.rog <- Reduce(function(...) merge(...,by=c("V1","V2")),list(p1,p2,p3,p4,p5))
 
-#Make a column for each individual
+## Make a column for each individual
 sim.rog$tmp <- paste(sim.rog$p1,sim.rog$p2,sim.rog$p3,sim.rog$p4,sim.rog$p5,sep="")
 sim.rog <- sim.rog[c(1,2,8)]
 for (i in 1:22){
@@ -91,37 +155,56 @@ for (i in 1:22){
 sim.rog <- sim.rog[-3]
 names(sim.rog)[1:4] <- c("Chrom.r5","Pos.r5","Ref.mel","Ref.sim")
 
-#Calculate frequency of each allele across individuals
+## Calculate frequency of each allele across individuals
 sim.rog$Freq_A <- rowCounts(sim.rog[c(5:24)]=="A",na.rm=T)
 sim.rog$Freq_T <- rowCounts(sim.rog[c(5:24)]=="T",na.rm=T)
 sim.rog$Freq_C <- rowCounts(sim.rog[c(5:24)]=="C",na.rm=T)
 sim.rog$Freq_G <- rowCounts(sim.rog[c(5:24)]=="G",na.rm=T)
 sim.rog$Freq_N <- rowCounts(sim.rog[c(5:24)]=="-",na.rm=T)
 
-#sum of freqs A,T,C,G
+## Sum of freqs A,T,C,G
 sim.rog$depth_Dsim_Rogers <- rowSums(sim.rog[c("Freq_A","Freq_C","Freq_G","Freq_T")])
-#If freq of any allele is the same as total depth, not poly, else poly
+
+## If freq of any allele is the same as total depth, not poly, else poly
 sim.rog$is.poly_Dsim_Rogers <- ifelse(sim.rog$Freq_A==sim.rog$depth_Dsim_Rogers,0,ifelse(sim.rog$Freq_T==sim.rog$depth_Dsim_Rogers,0,ifelse(sim.rog$Freq_G==sim.rog$depth_Dsim_Rogers,0,ifelse(sim.rog$Freq_C==sim.rog$depth_Dsim_Rogers,0,ifelse(sim.rog$Ref.sim=="-",NA,1)))))
-#First allele
+
+## First allele
 sim.rog$A1_Dsim_Rogers <- with(sim.rog,ifelse(Freq_A>0,"A",ifelse(Freq_T>0,"T",ifelse(Freq_C>0,"C",ifelse(Freq_G>0,"G",NA)))))
-#Alternative allele
+
+## Alternative allele
 sim.rog$A2_Dsim_Rogers <- with(sim.rog,ifelse(Freq_A>0 & Freq_T>0,"T",ifelse(Freq_A>0 & Freq_C>0,"C",ifelse(Freq_A>0 & Freq_G>0,"G",ifelse(Freq_T>0 & Freq_C>0,"C",ifelse(Freq_T>0 & Freq_G>0,"G",ifelse(Freq_C>0 & Freq_G>0,"G",NA)))))))
-#AF and MAF
+
+## AF and MAF
 sim.rog$AF_Dsim_Rogers <- ifelse(sim.rog$Freq_A>0,sim.rog$Freq_A/sim.rog$depth,ifelse(sim.rog$Freq_T>0,sim.rog$Freq_T/sim.rog$depth,ifelse(sim.rog$Freq_C>0,sim.rog$Freq_C/sim.rog$depth,ifelse(sim.rog$Freq_G>0,sim.rog$Freq_G/sim.rog$depth,NA))))
 sim.rog$MAF_Dsim_Rogers <- ifelse(sim.rog$AF_Dsim_Rogers<0.5,sim.rog$AF_Dsim_Rogers,1-sim.rog$AF_Dsim_Rogers)
 
-#merge simulans and GWAS predictors
+## Merge simulans and GWAS predictors
 sim.rog2 <- merge(sim.rog,GWAS.pos,by=c("Chrom.r5","Pos.r5"),all.y=T)
 #write.table(sim.rog2[c("Predictor","Chrom.r6","Pos.r6","Chrom.r5","Pos.r5","is.poly_Dsim_Rogers","depth_Dsim_Rogers","A1_Dsim_Rogers","A2_Dsim_Rogers","AF_Dsim_Rogers","MAF_Dsim_Rogers","BIN_START","LS","RR")],"~/Desktop/PloS_Biol_revision/sim.rog2.txt",quote=F,row.names=F)
+
 ----- /R code -----
 
 ##########################################
 ## D. yakuba (Rogers dataset)
 ##########################################
 
-# INSERT UNIX CODE HERE; TBD #####
+## Align D. melanogaster and D. yakuba genome
+#Use WYSIWYG MAUVE, using dmel-short.fasta, dyak-short.fasta and individuals 1 to X (in fasta file format) as input, using default settings
 
-#Dyak, Rogers####
+## Aligned fasta -> aligned dataframe (apply this for each subset of individuals) 
+perl ~/Documents/work/tools/popoolation_1.2.2/mauve-parser.pl --ref-input dmel-short.fasta --input dmel-dyak-1to3 --output multi-align-dmel-anchored-dyak-1to3 --crosscheck
+
+## Cbind genomes 1-20, while keeping only GWAS polymorphic positions 
+awk 'NR==FNR{a[$1,$2]=$3$4$5$6$7;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-dyak-1to3 GWAS_positions.r5.txt > 1to3.txt
+awk 'NR==FNR{a[$1,$2]=$5$6$7$8;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-dyak-4to7 GWAS_positions.r5.txt > 4to7.txt;
+awk 'NR==FNR{a[$1,$2]=$5$6$7$8;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-dyak-8to11 GWAS_positions.r5.txt > 8to11.txt;
+awk 'NR==FNR{a[$1,$2]=$5$6$7$8;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-dyak-12to15 GWAS_positions.r5.txt > 12to15.txt;
+awk 'NR==FNR{a[$1,$2]=$5$6$7;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-dyak-16to18 GWAS_positions.r5.txt > 16to18.txt;
+awk 'NR==FNR{a[$1,$2]=$5$6;next} ($1,$2) in a{print $0, a[$1,$2]}' multi-align-dmel-anchored-dyak-19to20 GWAS_positions.r5.txt > 19to20.txt;
+
+----- R code -----
+
+## Dyak, Rogers####
 p1 <- read.table("Desktop/PloS_Biol_revision/yakuba/1to3.txt")
 names(p1)[3] <- "p1"
 p2 <- read.table("Desktop/PloS_Biol_revision/yakuba/4to7.txt")
@@ -135,10 +218,10 @@ names(p5)[3] <- "p5"
 p6 <- read.table("Desktop/PloS_Biol_revision/yakuba/19to20.txt")
 names(p6)[3] <- "p6"
 
-#Combine genomic data from all 20 D. yakuba genomes
+## Combine genomic data from all 20 D. yakuba genomes
 yak.rog <- Reduce(function(...) merge(...,by=c("V1","V2")),list(p1,p2,p3,p4,p5,p6))
 
-#Make a column for each individual
+## Make a column for each individual
 yak.rog$tmp <- paste(yak.rog$p1,yak.rog$p2,yak.rog$p3,yak.rog$p4,yak.rog$p5,yak.rog$p6,sep="")
 yak.rog <- yak.rog[c(1,2,9)]
 for (i in 1:22){
@@ -147,77 +230,76 @@ for (i in 1:22){
 yak.rog <- yak.rog[-3]
 names(yak.rog)[1:4] <- c("Chrom.r5","Pos.r5","Ref.mel","Ref.yak")
 
-#Calculate frequency of each allele across individuals
+## Calculate frequency of each allele across individuals
 yak.rog$Freq_A <- rowCounts(yak.rog[c(5:24)]=="A",na.rm=T)
 yak.rog$Freq_T <- rowCounts(yak.rog[c(5:24)]=="T",na.rm=T)
 yak.rog$Freq_C <- rowCounts(yak.rog[c(5:24)]=="C",na.rm=T)
 yak.rog$Freq_G <- rowCounts(yak.rog[c(5:24)]=="G",na.rm=T)
 yak.rog$Freq_N <- rowCounts(yak.rog[c(5:24)]=="-",na.rm=T)
 
-#sum of freqs A,T,C,G
+## Sum of freqs A,T,C,G
 yak.rog$depth_Dyak_Rogers <- rowSums(yak.rog[c("Freq_A","Freq_C","Freq_G","Freq_T")])
-#If freq of any allele is the same as total depth, not poly, else poly
+
+## If freq of any allele is the same as total depth, not poly, else poly
 yak.rog$is.poly_Dyak_Rogers <- ifelse(yak.rog$Freq_A==yak.rog$depth_Dyak_Rogers,0,ifelse(yak.rog$Freq_T==yak.rog$depth_Dyak_Rogers,0,ifelse(yak.rog$Freq_G==yak.rog$depth_Dyak_Rogers,0,ifelse(yak.rog$Freq_C==yak.rog$depth_Dyak_Rogers,0,ifelse(yak.rog$Ref.yak=="-",NA,1)))))
-#First allele
+
+## First allele
 yak.rog$A1_Dyak_Rogers <- with(yak.rog,ifelse(Freq_A>0,"A",ifelse(Freq_T>0,"T",ifelse(Freq_C>0,"C",ifelse(Freq_G>0,"G",NA)))))
-#Alternative allele
+
+## Alternative allele
 yak.rog$A2_Dyak_Rogers <- with(yak.rog,ifelse(Freq_A>0 & Freq_T>0,"T",ifelse(Freq_A>0 & Freq_C>0,"C",ifelse(Freq_A>0 & Freq_G>0,"G",ifelse(Freq_T>0 & Freq_C>0,"C",ifelse(Freq_T>0 & Freq_G>0,"G",ifelse(Freq_C>0 & Freq_G>0,"G",NA)))))))
-#AF and MAF
+
+## AF and MAF
 yak.rog$AF_Dyak_Rogers <- ifelse(yak.rog$Freq_A>0,yak.rog$Freq_A/yak.rog$depth,ifelse(yak.rog$Freq_T>0,yak.rog$Freq_T/yak.rog$depth,ifelse(yak.rog$Freq_C>0,yak.rog$Freq_C/yak.rog$depth,ifelse(yak.rog$Freq_G>0,yak.rog$Freq_G/yak.rog$depth,NA))))
 yak.rog$MAF_Dyak_Rogers <- ifelse(yak.rog$AF_Dyak_Rogers<0.5,yak.rog$AF_Dyak_Rogers,1-yak.rog$AF_Dyak_Rogers)
 
-#merge simulans and GWAS predictors
+## Merge simulans and GWAS predictors
 yak.rog2 <- merge(yak.rog,GWAS.pos,by=c("Chrom.r5","Pos.r5"),all.y=T)
 #write.table(yak.rog2[c("Predictor","Chrom.r6","Pos.r6","Chrom.r5","Pos.r5","is.poly_Dyak_Rogers","depth_Dyak_Rogers","A1_Dyak_Rogers","A2_Dyak_Rogers","AF_Dyak_Rogers","MAF_Dyak_Rogers","BIN_START","LS","RR")],"~/Desktop/PloS_Biol_revision/yak.rog2.txt",quote=F,row.names=F)
 
+----- /R code -----
 
+##########################################
+## LD prune ###
+##########################################
+
+plink --noweb --bfile f3c.lhm.snp --clump assoc_mixed_model/mm.assoc2 --clump-p1 1 --clump-p2 1 --clump-kb 1 --clump-r2 0.4 --clump-field Wald_P --out clumped_r0.4_1kb
 
 ##########################################
 ## Antagonistic vs. non-antagonistic
 ##########################################
 
-## LS / RR info ####
-GWAS.pos <- read.table(paste0(dir,"GWAS_positions.r5.txt"))
-names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
-GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
-levels(GWAS.pos$Chrom_plink) <- 1:5
-GWAS.pos$Predictor <- paste(GWAS.pos$Chrom_plink,GWAS.pos$Pos.r6,sep="_")
+----- R code -----
 
-## Linked selection table
-ls <- read.table("Desktop/PloS_Biol_revision/LS_map_all_chrom_r5_and_r6.txt",header = T)
-
-## Recombination rate table
-rr <- read.table("Desktop/PloS_Biol_revision/recom_all_chrom_r5_and_r6.txt",head=T)
-
-## Link window-based measures with SNP positions
-GWAS.pos$BIN_START <- cut(GWAS.pos$Pos.r5,breaks=levels(factor(ls$BIN_START)),include.lowest = T,labels=F,right=F)
-GWAS.pos$BIN_START <- GWAS.pos$BIN_START-1
-GWAS.pos$BIN_START <- GWAS.pos$BIN_START*1000
-GWAS.pos$BIN_START<- GWAS.pos$BIN_START+1
-names(GWAS.pos)[1:2] <- c("Chrom","Pos")
-GWAS.pos <- Reduce(function(...) merge(...,by=c("Chrom","BIN_START"),all.x=T),list(GWAS.pos,ls[c("Chrom","BIN_START","LS")],rr[c("Chrom","BIN_START","RR")]))
-names(GWAS.pos)[c(1,3)] <- c("Chrom.r5","Pos.r5")
-
-
-## Effect size analysis: 'Analysis B' #####
+## Import 3 datasets and merge with association info 
 
 sim.frq3 <- read.table(paste0(dir,"sim.frq3.txt"),head=T)
 sim.rog2 <- read.table(paste0(dir,"sim.rog2.txt"),head=T)
 yak.rog2 <- read.table(aste0(dir,"sim.yak2.txt"),head=T)
 dd <- Reduce(function(...) merge(...,all.x=T,by=c("Predictor")),list(assoc,sim.frq3[c("Predictor","N_alleles_Dsim_Signor","N_chrom_Dsim_Signor","A1_Dsim_Signor","A2_Dsim_Signor","A1_freq_Dsim_Signor","A2_freq_Dsim_Signor","MAF_Dsim_Signor")],sim.rog2[c("Predictor","is.poly_Dsim_Rogers","depth_Dsim_Rogers", "A1_Dsim_Rogers", "A2_Dsim_Rogers", "AF_Dsim_Rogers","MAF_Dsim_Rogers")],yak.rog2[c("Predictor","is.poly_Dyak_Rogers","depth_Dyak_Rogers", "A1_Dyak_Rogers", "A2_Dyak_Rogers", "AF_Dyak_Rogers","MAF_Dyak_Rogers")],GWAS.pos))
 
+## Do LHM alleles and Signor alleles match?
 dd$Same_alleles_LHm_Dsim_Signor <- with(dd,ifelse((as.character(A1)==as.character(A1_Dsim_Signor) | as.character(A1)==as.character(A2_Dsim_Signor)) & (as.character(A2)==as.character(A2_Dsim_Signor) | as.character(A2)==as.character(A1_Dsim_Signor)),1,0))
+## If yes and if polymorphic, then trans-specific status = 1
 dd$is.transspecific_Dsim_Signor <- ifelse(is.na(dd$Same_alleles_LHm_Dsim_Signor) | dd$Same_alleles_LHm_Dsim_Signor==0,0,1)
+## If yes and if polymorphic, then get MAF
 dd$MAF_Dsim_Signor_incl_mono <- ifelse(is.na(dd$Same_alleles_LHm_Dsim_Signor) | dd$Same_alleles_LHm_Dsim_Signor!=1,0,dd$MAF_Dsim_Signor)
 
+## Do LHM alleles and Rogers simulans alleles match?
 dd$Same_alleles_LHm_Dsim_Rogers <- with(dd,ifelse((as.character(A1)==as.character(A1_Dsim_Rogers) | as.character(A1)==as.character(A2_Dsim_Rogers)) & (as.character(A2)==as.character(A2_Dsim_Rogers) | as.character(A2)==as.character(A1_Dsim_Rogers)),1,0))
+## If yes and if polymorphic, then trans-specific status = 1
 dd$is.transspecific_Dsim_Rogers <- ifelse(dd$is.poly_Dsim_Rogers==1 & dd$Same_alleles_LHm_Dsim_Rogers==1,1,0)
+## If yes and if polymorphic, then get MAF
 dd$MAF_Dsim_Rogers_incl_mono <- ifelse(is.na(dd$Same_alleles_LHm_Dsim_Rogers) | dd$Same_alleles_LHm_Dsim_Rogers!=1,0,dd$MAF_Dsim_Rogers)
 
+## Do LHM alleles and Rogers yakuba alleles match?
 dd$Same_alleles_LHm_Dyak_Rogers <- with(dd,ifelse((as.character(A1)==as.character(A1_Dyak_Rogers) | as.character(A1)==as.character(A2_Dyak_Rogers)) & (as.character(A2)==as.character(A2_Dyak_Rogers) | as.character(A2)==as.character(A1_Dyak_Rogers)),1,0))
+## If yes and if polymorphic, then trans-specific status = 1
 dd$is.transspecific_Dyak_Rogers <- ifelse(dd$is.poly_Dyak_Rogers==1 & dd$Same_alleles_LHm_Dyak_Rogers==1,1,0)
+## If yes and if polymorphic, then get MAF
 dd$MAF_Dyak_Rogers_incl_mono <- ifelse(is.na(dd$Same_alleles_LHm_Dyak_Rogers) | dd$Same_alleles_LHm_Dyak_Rogers!=1,0,dd$MAF_Dyak_Rogers)
 
+## Regress LS out of initial MAF
 dd$MAF.resid[!is.na(dd$LS) & dd$Chromosome!="X"] <- glm(data=subset(dd,!is.na(LS) & Chromosome!="X"),MAF~LS)$residuals
 dd$MAF.resid[!is.na(dd$RR) & dd$Chromosome=="X"] <- glm(data=subset(dd,!is.na(RR) & Chromosome=="X"),MAF~RR)$residuals
 
@@ -225,6 +307,10 @@ dd$MAF.resid[!is.na(dd$RR) & dd$Chromosome=="X"] <- glm(data=subset(dd,!is.na(RR
 matched_pred <- read.table(paste0(dir,"clumped_r0.4_1kb.clumped"),head=T)
 names(matched_pred)[3] <- "Predictor"
 ddc <- merge(dd,matched_pred[3],by="Predictor")
+
+##########################################
+## 'Analysis B' #####
+##########################################
 
 ## Dsim, Signor ####
 
@@ -290,9 +376,12 @@ fig6a <- ggplot(subset(ors,Variable=="Abs_Effect"),aes(y=OR,x=Dataset2,col=Pval)
   xlab("")
   fig6a
 
-## Matched analysis: 'Analysis A' #####
+##########################################
+## 'Analysis A' #####
+##########################################
 
-## Dsim, Signor####
+## Dsim, Signor ####
+
 ## Compare MAF- and LS-matched antagonistic and non-antagonistic SNPs
 
 ## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
@@ -361,7 +450,7 @@ ggplot(match_sum.Dsim_Signor,aes(is.transspecific_Dsim_Signor))+
 ## Empirical P value
 sum(match_sum.Dsim_Signor$is.transspecific_Dsim_Signor>obs_mean.Dsim_Signor)/1000
 
-#Dsim, Rogers####
+## Dsim, Rogers ####
 
 ## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
 cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X"& depth_Dsim_Rogers==20)$MAF.resid
@@ -429,7 +518,8 @@ ggplot(match_sum.Dsim_Rogers,aes(is.transspecific_Dsim_Rogers))+
 ## Empirical P value
 sum(match_sum.Dsim_Rogers$is.transspecific_Dsim_Rogers>obs_mean.Dsim_Rogers)/1000
 
-#Dyak, Rogers####
+## Dyak, Rogers ####
+
 ## Create ordered vector of autosomal, LS-corrected MAF quantiles (for antagonistic SNPs) to sample from
 cand.auto <- subset(ddc,fdr<0.3 & Chromosome!="X"& depth_Dyak_Rogers==20)$MAF.resid
 cand_ord.auto <- sort(cand.auto)
