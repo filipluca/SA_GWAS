@@ -1,29 +1,9 @@
 
-##########################################
-## GWAS predictors + LS info
-##########################################
+dir <- "~/Desktop/PloS_Biology_revision/"
 
-## LS / RR info ####
-GWAS.pos <- read.table(paste0(dir,"GWAS_positions.r5.txt"))
-names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
-GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
-levels(GWAS.pos$Chrom_plink) <- 1:5
-GWAS.pos$Predictor <- paste(GWAS.pos$Chrom_plink,GWAS.pos$Pos.r6,sep="_")
-
-## Linked selection table
-ls <- read.table("Desktop/PloS_Biol_revision/LS_map_all_chrom_r5_and_r6.txt",header = T)
-
-## Recombination rate table
-rr <- read.table("Desktop/PloS_Biol_revision/recom_all_chrom_r5_and_r6.txt",head=T)
-
-## Link window-based measures with SNP positions
-GWAS.pos$BIN_START <- cut(GWAS.pos$Pos.r5,breaks=levels(factor(ls$BIN_START)),include.lowest = T,labels=F,right=F)
-GWAS.pos$BIN_START <- GWAS.pos$BIN_START-1
-GWAS.pos$BIN_START <- GWAS.pos$BIN_START*1000
-GWAS.pos$BIN_START<- GWAS.pos$BIN_START+1
-names(GWAS.pos)[1:2] <- c("Chrom","Pos")
-GWAS.pos <- Reduce(function(...) merge(...,by=c("Chrom","BIN_START"),all.x=T),list(GWAS.pos,ls[c("Chrom","BIN_START","LS")],rr[c("Chrom","BIN_START","RR")]))
-names(GWAS.pos)[c(1,3)] <- c("Chrom.r5","Pos.r5")
+library(matrixStats)
+library(MASS)
+library(cowplot)
 
 ##########################################
 ## D. simulans (Signor dataset)
@@ -191,9 +171,32 @@ yak.rog2 <- merge(yak.rog,GWAS.pos,by=c("Chrom.r5","Pos.r5"),all.y=T)
 #write.table(yak.rog2[c("Predictor","Chrom.r6","Pos.r6","Chrom.r5","Pos.r5","is.poly_Dyak_Rogers","depth_Dyak_Rogers","A1_Dyak_Rogers","A2_Dyak_Rogers","AF_Dyak_Rogers","MAF_Dyak_Rogers","BIN_START","LS","RR")],"~/Desktop/PloS_Biol_revision/yak.rog2.txt",quote=F,row.names=F)
 
 
+
 ##########################################
 ## Antagonistic vs. non-antagonistic
 ##########################################
+
+## LS / RR info ####
+GWAS.pos <- read.table(paste0(dir,"GWAS_positions.r5.txt"))
+names(GWAS.pos) <- c("Chrom.r5","Pos.r5","Chrom.r6","Pos.r6")
+GWAS.pos$Chrom_plink <- GWAS.pos$Chrom.r6
+levels(GWAS.pos$Chrom_plink) <- 1:5
+GWAS.pos$Predictor <- paste(GWAS.pos$Chrom_plink,GWAS.pos$Pos.r6,sep="_")
+
+## Linked selection table
+ls <- read.table("Desktop/PloS_Biol_revision/LS_map_all_chrom_r5_and_r6.txt",header = T)
+
+## Recombination rate table
+rr <- read.table("Desktop/PloS_Biol_revision/recom_all_chrom_r5_and_r6.txt",head=T)
+
+## Link window-based measures with SNP positions
+GWAS.pos$BIN_START <- cut(GWAS.pos$Pos.r5,breaks=levels(factor(ls$BIN_START)),include.lowest = T,labels=F,right=F)
+GWAS.pos$BIN_START <- GWAS.pos$BIN_START-1
+GWAS.pos$BIN_START <- GWAS.pos$BIN_START*1000
+GWAS.pos$BIN_START<- GWAS.pos$BIN_START+1
+names(GWAS.pos)[1:2] <- c("Chrom","Pos")
+GWAS.pos <- Reduce(function(...) merge(...,by=c("Chrom","BIN_START"),all.x=T),list(GWAS.pos,ls[c("Chrom","BIN_START","LS")],rr[c("Chrom","BIN_START","RR")]))
+names(GWAS.pos)[c(1,3)] <- c("Chrom.r5","Pos.r5")
 
 
 ## Effect size analysis: 'Analysis B' #####
