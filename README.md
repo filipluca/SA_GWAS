@@ -1,9 +1,6 @@
 # Genome-wide sexually antagonistic variants reveal long-standing constraints on sexual dimorphism in fruit flies (2019)
 
 
-#### UPDATE 25.04.19: Cleaning up still required for text file 9 (avoid using any zenodo datafiles until new update...)
-
-
 Welcome!
 
 This github page contains the code underlying analyses and figures presented in 'Genome-wide sexually antagonistic variants reveal long-standing constraints on sexual dimorphism in fruit flies' (Ruzicka et al. 2019, PLOS Biol). 
