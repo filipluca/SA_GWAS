@@ -144,7 +144,7 @@ obs$SD.1 <- NA
 
 ## Combine XvsA and VEP dataframes
 XvsA_VEP <- rbind(XvsA_a,obs)
-write.table(XvsA_VEP,paste0(dir,"Genome_Partitioning_Data.txt"),quote=F,row.names=F,sep="\t")
+write.table(XvsA_VEP,paste0(dir,"Genome_Partitioning_Data.txt"),row.names=F,sep="\t")
 
 ###########################################
 ## Association file + additional info
