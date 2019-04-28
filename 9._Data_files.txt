@@ -1,5 +1,5 @@
-## Here cna be found descriptions and code used to produce the data files uploaded to the zenodo repository
-## The 'intermediate files' (e.g. "pheno.txt", as opposed to "Pheno_Data.txt") are not uploaded to zenodo; however, they are presented here for clarity, so that one can follow the main code (files 1-8) which makes use of these intermediate data files 
+## Here can be found descriptions and code used to produce the data files uploaded to the zenodo repository
+## The 'intermediate files' (e.g. "pheno.txt", as opposed to "Pheno_Data.txt") are not uploaded to zenodo; however, they are presented here for clarity, so that one can follow the main code (files 1-8) which makes use of these intermediate data files. 
 
 dir <- "~/Desktop/PloS_Biol_revision/"
 
@@ -27,7 +27,7 @@ write.table(pheno,"Pheno_Data.txt",row.names=F,quote=F,sep="\t")
 ## PC Matrix file
 ##############################
 
-## Contains top 20 principal components, derived from overlapping SNPs found among LHm and DGRP datasets
+## This file top 20 principal components, derived from overlapping SNPs found among LHm and DGRP datasets
 ## Pruned for r2 (LD<0.2) and MAF (>0.05)
 ## Columns 1 and 2 = individuals
 ## Columns 3-22 = PCs 1-20
@@ -85,7 +85,7 @@ write.table(ld_lhm_sum,paste0(dir,"LD_LHm_Data.txt"),quote=F,row.names=F,sep="\t
 ## XvsA and VEP files
 ##############################
 
-## File contains estimated share of total heritability contributed by a given genomic partition
+## This file contains estimated share of total heritability contributed by a given genomic partition
 ## Also includes expected share, CIs, and P value (computed parametrically for XvsA, computed empirically for VEP)
 ## Column 1 = Genomic partition (not named)
 ## Column 2 = Share of antagonistic SNP heritability (i.e. observed h2SNP for a given partition / total h2SNP across all partitions) estimated explained by given partition
@@ -150,7 +150,7 @@ write.table(XvsA_VEP,paste0(dir,"Genome_Partitioning_Data.txt"),quote=F,row.name
 ## Association file + additional info
 ###########################################
 
-## This dataframe will probably be the most useful object for future users
+## This file will probably be the most useful object for future users
 ## Broadly speaking, it contains the GWAS results + a number of additional columns
 ## Using this dataset, one can reproduce Figs 1B, 4A,C,E,G,I,K and 6A, as well as Figs S2, S3, S4, and S7.
 ## Column 1 = Predictor ID (Chrom_Pos format, with Chroms in plink format)
@@ -321,26 +321,25 @@ rm(yak.rog2)
 assoc <- assoc[order(assoc$Chromosome,assoc$Basepair),]
 write.table(assoc,paste0(dir,"Assoc_Data.txt"),quote=F,row.names=F,sep="\t")
 
-
 ############################################################
-## SNP-based balancing selection; 'Analysis A' in Dmel
+## SNP-based balancing selection file; 'Analysis A' in Dmel
 ############################################################
 
-## This dataframe contains the mean MAFs for 1000 simulated sets of non-antagonistic SNPs in the DGRP, ZI and SA populations
+## This file contains the mean MAFs for 1000 simulated sets of non-antagonistic SNPs in the DGRP, ZI and SA populations
 ## Using this dataset, one can reproduce Fig 4B,F,J.
 ## Column 1 = Simulation run
 ## Columns 2-4 = Mean simulated MAF for non-antagonistic SNPs in the DGRP, ZI and SA pops respectively
-## The last column contains the mean MAF for antagonistic SNPs in all three populations
+## The last row contains the mean MAF for antagonistic SNPs in all three populations
 
 match_sum.threepops <- cbind(match_sum.dgrp,match_sum.dpgp3[2],match_sum.sa[2])
 match_sum.threepops[1001,] <- c("Antagonistic",obs_mean.dgrp,obs_mean.dpgp3,obs_mean.sa)
 write.table(match_sum.threepops,paste0(dir,"Matched_Analysis_DGRP_ZI_SA_Data.txt"),quote=F,row.names = F,sep="\t")
 
 ############################################################
-## SNP-based balancing selection: 'Analysis C' in Dmel
+## SNP-based balancing selection file; 'Analysis C' in Dmel
 ############################################################
 
-## This dataframe contains the mean MAFs in the DGRP, ZI and SA populations, presented for 100 quantiles of Absolute Effect size
+## This file contains the mean MAFs in the DGRP, ZI and SA populations, presented for 100 quantiles of Absolute Effect size
 ## In each quantile of effect size, the MAFs have also been matched to LHM MAFs by drawing from 20 quantiles of LHM MAF
 ## Using this dataset, one can reproduce Fig 4D,H,L.
 ## Column 1 = MAF
@@ -362,18 +361,51 @@ write.table(indep_sum.threepops,paste0(dir,"Indep_Analysis_DGRP_ZI_SA_Data.txt")
 
 
 ################################
-## Sliding windows analyses
+## Sliding windows analyses file
 ##############################
 
-## DESCRIPTION TO BE ADDED !!!
+## This file contains sliding windows analysis data used in Fig 5A,B of manuscript
+## Column 1 = Chromosome of given window (r6 coordinates)
+## Column 2 = Starting position of given window (r6 coordinates)
+## Columns 3-7 = Heritability, SD, Null Likelihood, Alternative likelihood and Likelihood Ratio Test statistic of given window (these columns are not used in further analyses)
+## Column 8 = LRT P-value for given window (note that the distribution under the null is not uniform, because there is a 50% chance that the best fitting variance of a window is negative, in which case the P-value is undefined. P-values have therefore been adjusted so that the mean P-value under the null is 50%).
+## Column 9 = Benjamini-Hochberg Q-value for given window
+## Column 10 = Chromosome of given window (r5 coordinates)
+## Column 11 = Starting position of given window (r5 coordinates)
+## Column 12 = Linked selection value of given window (from Elyashiv et al. 2016)
+## Column 13 = Recombination rate value of given window (from Comeron et al. 2012)
+## Columns 14-16 = Tajima's D of given window for DGRP, ZI and SA populations
+## Columns 17-19 = Fst of given window for DGRP-ZI, SA-ZI and DGRP-SA population pairs (RAL=DGRP)
+## Column 20 = Binary Candidate/non-Candidate window status
+## Columns 21-23 = Residual Tajima's of given window for DGRP, ZI and SA populations
+## Columns 24-26 = Residual Fst of given window for DGRP-ZI, SA-ZI and DGRP-SA population paors
 
 ## Combine information
 cbat <- Reduce(function(...) merge(...,by=c("Chrom.r6","BIN_START.r6"),all.x=T),list(cbat,chunks[c("Chrom.r6","BIN_START.r6","Chrom.r5","BIN_START.r5")],ls[c("Chrom.r6","BIN_START.r6","LS")],rr[c("Chrom.r6","BIN_START.r6","RR")],stats.all.DGRP[,c("Chrom.r6","BIN_START.r6","Tajima.D_DGRP")],stats.all.DPGP3[,c("Chrom.r6","BIN_START.r6","Tajima.D_DPGP3")],stats.all.SA[,c("Chrom.r6","BIN_START.r6","Tajima.D_SA")],fst.stats[,c("Chrom.r6","BIN_START.r6","RAL.ZI","SA.ZI","RAL.SA")]))
 
-#Define antagonistic window
+## Define antagonistic window
 cbat$Candidate <- ifelse(cbat$fdr<0.1,1,0)
+
+## Clean up
 names(cbat)[23:25] <- c("Fst_RAL.ZI","Fst_SA.ZI","Fst_RAL.SA")
 cbat <- cbat[order(cbat$Chrom.r6,cbat$BIN_START.r6),]
+cbat <- cbat[c(1:2,6:10,12,15:26)]
+
+## Add residual columns for Taj D
+cbat$Tajima.D_DGRP.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate),],Tajima.D_DGRP~LS)$residuals
+cbat$Tajima.D_DGRP.resid[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DGRP) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Tajima.D_DGRP~RR)$residuals
+cbat$Tajima.D_DPGP3.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate),],Tajima.D_DPGP3~LS)$residuals
+cbat$Tajima.D_DPGP3.resid[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_DPGP3) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Tajima.D_DPGP3~RR)$residuals
+cbat$Tajima.D_SA.resid[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate),],Tajima.D_SA~LS)$residuals
+cbat$Tajima.D_SA.resid[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Tajima.D_SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Tajima.D_SA~RR)$residuals
+
+## Add residual columns for Fst
+cbat$Fst_RAL.SA.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate),],Fst_RAL.SA~LS)$residuals
+cbat$Fst_RAL.SA.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.SA) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Fst_RAL.SA~RR)$residuals
+cbat$Fst_RAL.ZI.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate),],Fst_RAL.ZI~LS)$residuals
+cbat$Fst_RAL.ZI.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Fst_RAL.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Fst_RAL.ZI~RR)$residuals
+cbat$Fst_SA.ZI.resid[!is.na(cbat$LS) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate)] <- glm(data=cbat[!is.na(cbat$LS) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate),],Fst_SA.ZI~LS)$residuals
+cbat$Fst_SA.ZI.resid[!is.na(cbat$RR) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X"] <- glm(data=cbat[!is.na(cbat$RR) & !is.na(cbat$Fst_SA.ZI) & !is.na(cbat$Candidate) & cbat$Chrom.r6=="X",],Fst_SA.ZI~RR)$residuals
 
 write.table(cbat,paste0(dir,"Sliding_Windows_Data.txt"),quote=F,row.names=F,sep="\t")
 
@@ -381,7 +413,11 @@ write.table(cbat,paste0(dir,"Sliding_Windows_Data.txt"),quote=F,row.names=F,sep=
 ## LD file, ZI
 ##############################
 
-## DESCRIPTION TO BE ADDED !!!
+## This file contains r2 values between pairs of sites within 1000bp, binned and averaged into 25 bp bins of distance, and split by the type of site
+## Using this file, one can reproduce Fig 5C of the manuscript
+## Column 1 = Maximum value of given distance bin
+## Column 2 = Type of SNP pair used to compute r2 values (either pairs of antag, pairs of control, or antag/control pairs)
+## Column 3 = Mean R2 value for given distance bin and given SNP pair type
 
 Cand <- subset(assoc,fdr<0.3)$Predictor
 
@@ -405,15 +441,14 @@ names(ld_dpgp3_sum)[1] <- "Distance_Bin_Maximum_value"
 write.table(ld_dpgp3_sum,paste0(dir,"LD_ZI_Data.txt"),quote=F,row.names=F,sep="\t")
 
 ############################################################
-## SNP-based balancing selection; 'Analysis A' in Dsim/Dyak 
+## SNP-based balancing selection file; 'Analysis A' in Dsim/Dyak 
 ############################################################
 
 ## This dataframe follows the same format as the 'Matched_Analysis_DGRP_ZI_SA_Data' presented for the DGRP, ZI and SA populations, except that it is applied to the three non-melanogaster datasets
 ## Using this dataset, one can reproduce Fig 6B-D.
 ## Column 1 = Simulation run
 ## Columns 2-4 = Mean proportion of non-antagonistic trans-specific SNPs in Dsim (Signor), Dsim (Rogers) and Dyak (Rogers), presented for each of 1000 simulation runs
-## The last column contains the mean proportion of trans-specific antagonistic SNPs in all three datasets
-
+## The last row contains the mean proportion of trans-specific antagonistic SNPs in all three datasets
 
 match_sum.threepops <- cbind(match_sum.Dsim_Signor,match_sum.Dsim_Rogers[2],match_sum.Dyak_Rogers[2])
 match_sum.threepops[1001,] <- c("Antagonistic",obs_mean.Dsim_Signor,obs_mean.Dsim_Rogers,obs_mean.Dyak_Rogers)
